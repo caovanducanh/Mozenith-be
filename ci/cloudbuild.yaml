@@ -1,0 +1,23 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/careful-cosine-467905-m1/demo-login', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/careful-cosine-467905-m1/demo-login']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      [
+        'run',
+        'deploy',
+        'demo-login',
+        '--image',
+        'gcr.io/careful-cosine-467905-m1/demo-login',
+        '--region',
+        'asia-southeast1',
+        '--platform',
+        'managed',
+        '--allow-unauthenticated',
+      ]
+
+images:
+  - 'gcr.io/careful-cosine-467905-m1/demo-login'

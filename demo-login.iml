@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module version="4">
+  <component name="AdditionalModuleElements">
+    <content url="file://$MODULE_DIR$" dumb="true">
+      <!-- Exclude Maven wrapper folder -->
+      <excludeFolder url="file://$MODULE_DIR$/.mvn" />
+
+      <!-- Exclude build outputs -->
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/build" />
+      <excludeFolder url="file://$MODULE_DIR$/out" />
+
+      <!-- Exclude logs & temp files -->
+      <excludeFolder url="file://$MODULE_DIR$/logs" />
+      <excludeFolder url="file://$MODULE_DIR$/tmp" />
+
+      <!-- Exclude IDE cache folders -->
+      <excludeFolder url="file://$MODULE_DIR$/.idea" />
+    </content>
+  </component>
+</module>

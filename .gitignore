@@ -1,0 +1,53 @@
+# Maven target folder
+target/
+
+# Maven Wrapper jar (nặng, thường không cần đẩy)
+.mvn/wrapper/maven-wrapper.jar
+
+# Giữ lại target trong các thư mục source (nếu có build riêng)
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# STS (Spring Tool Suite)
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.ipr
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# VS Code
+.vscode/
+
+# Environment variables files
+.env
+.env.*
+
+# Logs
+*.log
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Others
+HELP.md
+
+# Ignore .mvn folder entirely except wrapper scripts (optional)
+.mvn/
