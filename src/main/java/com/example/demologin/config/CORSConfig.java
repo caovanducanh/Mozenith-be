@@ -25,4 +25,3 @@ public class CORSConfig implements WebMvcConfigurer {
                 .addResourceLocations("classpath:/static/");
     }
 }
-

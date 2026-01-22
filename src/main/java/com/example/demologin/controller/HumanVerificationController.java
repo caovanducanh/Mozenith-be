@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 
+// TEMPORARILY DISABLED - Human verification feature
+/*
 @RestController
 @RequestMapping("/api")
 public class HumanVerificationController {
@@ -30,3 +32,4 @@ public class HumanVerificationController {
         }
     }
 }
+*/

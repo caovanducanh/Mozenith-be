@@ -13,6 +13,8 @@ import org.springframework.util.MultiValueMap;
 
 import java.util.Map;
 
+// TEMPORARILY DISABLED - Human verification feature
+/*
 @Service
 public class HumanVerificationServiceImpl implements HumanVerificationService {
 
@@ -52,3 +54,4 @@ public class HumanVerificationServiceImpl implements HumanVerificationService {
         }
     }
 }
+*/
