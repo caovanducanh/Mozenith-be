@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.example.demologin.utils.UserAgentUtil;
 
 @Component
 @RequiredArgsConstructor
@@ -69,6 +70,8 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         
         boolean isMobile = false;
         try {
+            String incomingState = request.getParameter("state");
+            logger.info("OAuth2 callback received state={}", incomingState);
             // If the OAuth flow was initiated via the mobile initiation endpoint, a session
             // attribute 'oauth2_mobile' will be set. Read and clear it here.
             if (request.getSession(false) != null) {
@@ -100,6 +103,23 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
             if (!isMobile && state != null && state.endsWith("::m")) {
                 isMobile = true;
                 logger.info("Detected mobile OAuth via state parameter for {} (state={})", email, state);
+            }
+
+            // Fallback: detect mobile via User-Agent header if detection above failed
+            if (!isMobile) {
+                try {
+                    String ua = request.getHeader("User-Agent");
+                    if (ua != null) {
+                        UserAgentUtil.DeviceInfo info = UserAgentUtil.parseUserAgent(ua);
+                        String deviceType = info.getDeviceType();
+                        if ("Mobile".equalsIgnoreCase(deviceType) || "Tablet".equalsIgnoreCase(deviceType)) {
+                            isMobile = true;
+                            logger.info("Detected mobile OAuth via User-Agent for {} (deviceType={})", email, deviceType);
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.debug("User-Agent parsing fallback failed: {}", e.getMessage());
+                }
             }
 
             LoginResponse userResponse = authenticationService.getUserResponse(email, name);
