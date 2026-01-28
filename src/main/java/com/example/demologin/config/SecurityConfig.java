@@ -85,6 +85,7 @@ public class SecurityConfig {
                             "/oauth2/authorization/**",
                             // Mobile-initiated OAuth2 redirect helper
                             "/mobi/oauth2/authorization/**"
+                                ,"/debug/**"
                     ).permitAll();
                     
                     // Tất cả các API endpoints khác cần authentication

@@ -105,6 +105,7 @@ public class Filter extends OncePerRequestFilter {
             "/oauth2/authorization/**",
             // Mobile-initiated OAuth2 redirect helper
             "/mobi/oauth2/authorization/**"
+            ,"/debug/**"
         );
 
         return systemPublicEndpoints.stream()

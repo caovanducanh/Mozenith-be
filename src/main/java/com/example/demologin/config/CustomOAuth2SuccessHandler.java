@@ -29,6 +29,17 @@ import org.slf4j.LoggerFactory;
 public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(CustomOAuth2SuccessHandler.class);
+    // For debugging: store the most recent redirect URL and whether it was mobile
+    private static volatile String lastRedirectUrl = null;
+    private static volatile boolean lastRedirectIsMobile = false;
+
+    public static String getLastRedirectUrl() {
+        return lastRedirectUrl;
+    }
+
+    public static boolean getLastRedirectIsMobile() {
+        return lastRedirectIsMobile;
+    }
 
 
     private final AuthenticationService authenticationService;
@@ -102,6 +113,9 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
                 String redirectUrl = base + "token=" + userResponse.getToken() + "&refreshToken="
                     + userResponse.getRefreshToken();
                 logger.info("OAuth2 success for {} (mobile={}): redirecting to {}", email, isMobile, redirectUrl);
+                // record for debugging
+                lastRedirectUrl = redirectUrl;
+                lastRedirectIsMobile = isMobile;
                 response.sendRedirect(redirectUrl);
             
         } catch (Exception e) {
