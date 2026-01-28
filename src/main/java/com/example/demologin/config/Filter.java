@@ -102,7 +102,9 @@ public class Filter extends OncePerRequestFilter {
                 "/swagger-resources/**",
                 "/webjars/**",
                 "/login/oauth2/code/**",
-                "/oauth2/authorization/**"
+            "/oauth2/authorization/**",
+            // Mobile-initiated OAuth2 redirect helper
+            "/mobi/oauth2/authorization/**"
         );
 
         return systemPublicEndpoints.stream()

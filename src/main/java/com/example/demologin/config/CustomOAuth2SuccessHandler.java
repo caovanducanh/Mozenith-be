@@ -6,6 +6,7 @@ import com.example.demologin.enums.ActivityType;
 import com.example.demologin.repository.UserRepository;
 import com.example.demologin.service.AuthenticationService;
 import com.example.demologin.service.UserActivityLogService;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -35,6 +36,9 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
 
     @Value("${frontend.url.base}")
     private String frontendUrl;
+    
+    @Value("${frontend.url.mobile}")
+    private String frontendMobileUrl;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
@@ -48,7 +52,36 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
             return;
         }
         
+        boolean isMobile = false;
         try {
+            // If the OAuth flow was initiated via the mobile initiation endpoint, a session
+            // attribute 'oauth2_mobile' will be set. Read and clear it here.
+            if (request.getSession(false) != null) {
+                Object mobileAttr = request.getSession(false).getAttribute("oauth2_mobile");
+                isMobile = Boolean.TRUE.equals(mobileAttr);
+                if (isMobile) request.getSession(false).removeAttribute("oauth2_mobile");
+            }
+
+            if (!isMobile && request.getCookies() != null) {
+                for (Cookie c : request.getCookies()) {
+                    if ("oauth2_mobile".equals(c.getName()) && "true".equalsIgnoreCase(c.getValue())) {
+                        isMobile = true;
+                        // clear cookie by setting maxAge=0
+                        Cookie clear = new Cookie("oauth2_mobile", "");
+                        clear.setPath("/");
+                        clear.setMaxAge(0);
+                        response.addCookie(clear);
+                        break;
+                    }
+                }
+            }
+
+            // Also inspect OAuth2 state — the custom resolver appends ::m when mobile=true
+            String state = request.getParameter("state");
+            if (!isMobile && state != null && state.endsWith("::m")) {
+                isMobile = true;
+            }
+
             LoginResponse userResponse = authenticationService.getUserResponse(email, name);
             
             // Log successful OAuth2 login
@@ -56,9 +89,10 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
             userActivityLogService.logUserActivity(user, ActivityType.LOGIN_ATTEMPT, 
                 "OAuth2 login successful via " + getProviderName(authentication));
             
-            String redirectUrl = frontendUrl + "login?token=" + userResponse.getToken() + "&refreshToken="
+                String base = isMobile ? frontendMobileUrl : frontendUrl;
+                String redirectUrl = base + "token=" + userResponse.getToken() + "&refreshToken="
                     + userResponse.getRefreshToken();
-            response.sendRedirect(redirectUrl);
+                response.sendRedirect(redirectUrl);
             
         } catch (Exception e) {
             // Log failed OAuth2 login attempt  
@@ -72,8 +106,9 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
             userActivityLogService.logUserActivity(user, ActivityType.LOGIN_ATTEMPT, 
                 "OAuth2 login failed: " + e.getMessage());
             
-            response.sendRedirect(
-                    frontendUrl + "login?error=" + e.getMessage().replace(" ", "_"));
+                String base = isMobile ? frontendMobileUrl : frontendUrl;
+                String errorMessage = e.getMessage() == null ? "unknown_error" : e.getMessage().replace(" ", "_");
+                response.sendRedirect(base + "error=" + errorMessage);
         }
     }
     

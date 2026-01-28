@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -37,10 +38,13 @@ public class SecurityConfig {
 
     private final PublicEndpointHandlerMapping publicEndpointHandlerMapping;
 
-    public SecurityConfig(@Lazy AuthenticationService authenticationService, Filter filter, PublicEndpointHandlerMapping publicEndpointHandlerMapping) {
+    private final ClientRegistrationRepository clientRegistrationRepository;
+
+    public SecurityConfig(@Lazy AuthenticationService authenticationService, Filter filter, PublicEndpointHandlerMapping publicEndpointHandlerMapping, ClientRegistrationRepository clientRegistrationRepository) {
         this.authenticationService = authenticationService;
         this.filter = filter;
         this.publicEndpointHandlerMapping = publicEndpointHandlerMapping;
+        this.clientRegistrationRepository = clientRegistrationRepository;
     }
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -78,7 +82,9 @@ public class SecurityConfig {
                             "/webjars/**",
                             // OAuth2 system endpoints (Spring Security tự động tạo)
                             "/login/oauth2/code/**",
-                            "/oauth2/authorization/**"
+                            "/oauth2/authorization/**",
+                            // Mobile-initiated OAuth2 redirect helper
+                            "/mobi/oauth2/authorization/**"
                     ).permitAll();
                     
                     // Tất cả các API endpoints khác cần authentication
@@ -87,11 +93,16 @@ public class SecurityConfig {
                     auth.anyRequest().authenticated();
                 })
                 .oauth2Login(oauth2 -> oauth2
-                        .loginPage("/oauth2/authorization/google")
-                        .defaultSuccessUrl("/api/oauth2/success")
-                        .failureUrl("/api/oauth2/failure")
-                        .successHandler(customOAuth2SuccessHandler)
-                        .failureHandler(customOAuth2FailureHandler)
+                    .loginPage("/oauth2/authorization/google")
+                    .authorizationEndpoint(authEndpoint -> authEndpoint
+                        .authorizationRequestResolver(
+                            new CustomAuthorizationRequestResolver(clientRegistrationRepository, "/oauth2/authorization")
+                        )
+                    )
+                    .defaultSuccessUrl("/api/oauth2/success")
+                    .failureUrl("/api/oauth2/failure")
+                    .successHandler(customOAuth2SuccessHandler)
+                    .failureHandler(customOAuth2FailureHandler)
                 )
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
