@@ -21,10 +21,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Component
 @RequiredArgsConstructor
 public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler {
+
+    private static final Logger logger = LoggerFactory.getLogger(CustomOAuth2SuccessHandler.class);
 
 
     private final AuthenticationService authenticationService;
@@ -59,7 +63,10 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
             if (request.getSession(false) != null) {
                 Object mobileAttr = request.getSession(false).getAttribute("oauth2_mobile");
                 isMobile = Boolean.TRUE.equals(mobileAttr);
-                if (isMobile) request.getSession(false).removeAttribute("oauth2_mobile");
+                if (isMobile) {
+                    request.getSession(false).removeAttribute("oauth2_mobile");
+                    logger.info("Detected mobile OAuth via session attribute for {}", email);
+                }
             }
 
             if (!isMobile && request.getCookies() != null) {
@@ -71,6 +78,7 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
                         clear.setPath("/");
                         clear.setMaxAge(0);
                         response.addCookie(clear);
+                        logger.info("Detected mobile OAuth via cookie for {}", email);
                         break;
                     }
                 }
@@ -80,6 +88,7 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
             String state = request.getParameter("state");
             if (!isMobile && state != null && state.endsWith("::m")) {
                 isMobile = true;
+                logger.info("Detected mobile OAuth via state parameter for {} (state={})", email, state);
             }
 
             LoginResponse userResponse = authenticationService.getUserResponse(email, name);
@@ -92,6 +101,7 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
                 String base = isMobile ? frontendMobileUrl : frontendUrl;
                 String redirectUrl = base + "token=" + userResponse.getToken() + "&refreshToken="
                     + userResponse.getRefreshToken();
+                logger.info("OAuth2 success for {} (mobile={}): redirecting to {}", email, isMobile, redirectUrl);
                 response.sendRedirect(redirectUrl);
             
         } catch (Exception e) {
@@ -108,6 +118,7 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
             
                 String base = isMobile ? frontendMobileUrl : frontendUrl;
                 String errorMessage = e.getMessage() == null ? "unknown_error" : e.getMessage().replace(" ", "_");
+                logger.info("OAuth2 failure redirect (mobile={}) to {}error={}", isMobile, base, errorMessage);
                 response.sendRedirect(base + "error=" + errorMessage);
         }
     }
