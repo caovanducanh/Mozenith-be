@@ -35,6 +35,14 @@ public class CalendarCredential {
     @Column(length = 1024)
     private String scopes;
 
+    /**
+     * Email của tài khoản Google đã liên kết Calendar.
+     * QUAN TRỌNG: Đây là email của Google Calendar account, 
+     * KHÔNG phải email đăng nhập của user (có thể khác nhau).
+     */
+    @Column(name = "linked_email", length = 255)
+    private String linkedEmail;
+
     private Instant createdAt;
 
     private Instant updatedAt;

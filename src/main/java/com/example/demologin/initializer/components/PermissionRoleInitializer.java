@@ -135,7 +135,10 @@ public class PermissionRoleInitializer {
             TOKEN_INVALIDATE_OWN,
             TOKEN_VIEW_OWN,
             USER_VIEW_OWN_LOGIN_HISTORY,
-            CALENDAR_READ
+            CALENDAR_READ,
+            CALENDAR_CREATE,
+            CALENDAR_UPDATE,
+            CALENDAR_DELETE
         );
 
         Role member = roleRepository.findByName("MEMBER").orElseGet(() -> Role.builder().name("MEMBER").build());

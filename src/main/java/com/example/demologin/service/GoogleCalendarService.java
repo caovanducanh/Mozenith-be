@@ -22,6 +22,22 @@ public interface GoogleCalendarService {
     void deleteEvent(Long userId, String calendarId, String eventId);
     void deleteEventWithToken(String accessToken, String calendarId, String eventId);
 
+    /**
+     * Lưu credential từ OAuth flow với email của tài khoản Google đã liên kết.
+     * 
+     * @param userId ID của user trong hệ thống
+     * @param accessToken Access token từ Google
+     * @param refreshToken Refresh token từ Google (quan trọng cho offline access)
+     * @param scopes Các scope được cấp quyền
+     * @param expiresAt Thời điểm access token hết hạn
+     * @param linkedEmail Email của tài khoản Google đã liên kết Calendar (có thể khác email đăng nhập)
+     */
+    void saveCredentialFromAuthorizedClient(Long userId, String accessToken, String refreshToken, Set<String> scopes, Instant expiresAt, String linkedEmail);
+    
+    /**
+     * @deprecated Sử dụng method có linkedEmail parameter thay thế
+     */
+    @Deprecated
     void saveCredentialFromAuthorizedClient(Long userId, String accessToken, String refreshToken, Set<String> scopes, Instant expiresAt);
 
     Optional<CalendarCredential> findCredential(Long userId);

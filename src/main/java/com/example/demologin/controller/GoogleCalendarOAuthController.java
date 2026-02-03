@@ -16,6 +16,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -78,10 +79,14 @@ public class GoogleCalendarOAuthController {
     // Google OAuth2 URLs
     private static final String GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
     private static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+    private static final String GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
 
     // Calendar scopes - these are DIFFERENT from login scopes
     private static final String CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
     private static final String CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+    // Email scope để lấy thông tin email của tài khoản Google đã liên kết
+    private static final String EMAIL_SCOPE = "email";
+    private static final String PROFILE_SCOPE = "profile";
 
     /**
      * Initiate Google Calendar authorization for the current user.
@@ -109,13 +114,14 @@ public class GoogleCalendarOAuthController {
         // Build the redirect URI dynamically based on request if not configured
         String redirectUri = getRedirectUri(request);
 
-        // Build Google OAuth authorization URL with Calendar scopes
+        // Build Google OAuth authorization URL with Calendar scopes + email/profile để lấy email
         // CRITICAL: access_type=offline and prompt=consent are REQUIRED for refresh_token
+        String allScopes = CALENDAR_SCOPE + " " + CALENDAR_EVENTS_SCOPE + " " + EMAIL_SCOPE + " " + PROFILE_SCOPE;
         StringBuilder authUrl = new StringBuilder(GOOGLE_AUTH_URL);
         authUrl.append("?client_id=").append(URLEncoder.encode(googleClientId, StandardCharsets.UTF_8));
         authUrl.append("&redirect_uri=").append(URLEncoder.encode(redirectUri, StandardCharsets.UTF_8));
         authUrl.append("&response_type=code");
-        authUrl.append("&scope=").append(URLEncoder.encode(CALENDAR_SCOPE + " " + CALENDAR_EVENTS_SCOPE, StandardCharsets.UTF_8));
+        authUrl.append("&scope=").append(URLEncoder.encode(allScopes, StandardCharsets.UTF_8));
         authUrl.append("&access_type=offline");  // REQUIRED for refresh_token
         authUrl.append("&prompt=consent");        // REQUIRED to force consent and get refresh_token
         authUrl.append("&state=").append(URLEncoder.encode(state, StandardCharsets.UTF_8));
@@ -204,13 +210,14 @@ public class GoogleCalendarOAuthController {
         // Build the redirect URI dynamically based on request if not configured
         String redirectUri = getRedirectUri(request);
 
-        // Build Google OAuth authorization URL with Calendar scopes
+        // Build Google OAuth authorization URL with Calendar scopes + email/profile để lấy email
         // CRITICAL: access_type=offline and prompt=consent are REQUIRED for refresh_token
+        String allScopes = CALENDAR_SCOPE + " " + CALENDAR_EVENTS_SCOPE + " " + EMAIL_SCOPE + " " + PROFILE_SCOPE;
         StringBuilder authUrl = new StringBuilder(GOOGLE_AUTH_URL);
         authUrl.append("?client_id=").append(URLEncoder.encode(googleClientId, StandardCharsets.UTF_8));
         authUrl.append("&redirect_uri=").append(URLEncoder.encode(redirectUri, StandardCharsets.UTF_8));
         authUrl.append("&response_type=code");
-        authUrl.append("&scope=").append(URLEncoder.encode(CALENDAR_SCOPE + " " + CALENDAR_EVENTS_SCOPE, StandardCharsets.UTF_8));
+        authUrl.append("&scope=").append(URLEncoder.encode(allScopes, StandardCharsets.UTF_8));
         authUrl.append("&access_type=offline");  // REQUIRED for refresh_token
         authUrl.append("&prompt=consent");        // REQUIRED to force consent and get refresh_token
         authUrl.append("&state=").append(URLEncoder.encode(state, StandardCharsets.UTF_8));
@@ -304,6 +311,10 @@ public class GoogleCalendarOAuthController {
                 ? Instant.now().plusSeconds(expiresIn) 
                 : Instant.now().plusSeconds(3600);
             
+            // Lấy email của tài khoản Google đã liên kết (không phải email đăng nhập của user)
+            String linkedGoogleEmail = fetchGoogleEmail(accessToken);
+            log.info("📧 Linked Google email for user={}: {}", userId, linkedGoogleEmail);
+            
             // Save credential to database (SEPARATE from login token)
             java.util.Set<String> scopes = scope != null 
                 ? java.util.Set.of(scope.split(" "))
@@ -314,11 +325,12 @@ public class GoogleCalendarOAuthController {
                 accessToken, 
                 refreshToken, 
                 scopes, 
-                expiresAt
+                expiresAt,
+                linkedGoogleEmail
             );
             
-            log.info("✅ Google Calendar linked successfully for user={} (hasRefreshToken={}, scopes={})", 
-                userId, refreshToken != null, scope);
+            log.info("✅ Google Calendar linked successfully for user={} (hasRefreshToken={}, scopes={}, email={})", 
+                userId, refreshToken != null, scope, linkedGoogleEmail);
             
             handleCallbackRedirect(response, isMobile, true, null);
             
@@ -352,6 +364,37 @@ public class GoogleCalendarOAuthController {
         }
         
         return response.getBody();
+    }
+
+    /**
+     * Lấy thông tin email từ Google userinfo endpoint.
+     * 
+     * @param accessToken Access token đã được cấp từ OAuth flow
+     * @return Email của tài khoản Google, hoặc null nếu không lấy được
+     */
+    @SuppressWarnings("unchecked")
+    private String fetchGoogleEmail(String accessToken) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(accessToken);
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+            
+            ResponseEntity<Map> response = restTemplate.exchange(
+                GOOGLE_USERINFO_URL,
+                org.springframework.http.HttpMethod.GET,
+                request,
+                Map.class
+            );
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                String email = (String) response.getBody().get("email");
+                log.info("📧 Fetched Google email: {}", email);
+                return email;
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ Could not fetch Google email: {}", e.getMessage());
+        }
+        return null;
     }
 
     /**
@@ -480,8 +523,9 @@ public class GoogleCalendarOAuthController {
     /**
      * REST endpoint to unlink Google Calendar.
      * Removes stored credentials.
+     * Supports both GET and DELETE methods for flexibility.
      */
-    @GetMapping("/unlink")
+    @DeleteMapping("/unlink")
     @SecuredEndpoint("CALENDAR_DELETE")
     public ResponseEntity<Map<String, Object>> unlinkCalendar() {
         Long userId = accountUtils.getCurrentUser().getUserId();

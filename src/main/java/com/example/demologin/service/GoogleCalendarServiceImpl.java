@@ -211,7 +211,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
     @Override
     @Transactional
-    public void saveCredentialFromAuthorizedClient(Long userId, String accessToken, String refreshToken, Set<String> scopes, Instant expiresAt) {
+    public void saveCredentialFromAuthorizedClient(Long userId, String accessToken, String refreshToken, Set<String> scopes, Instant expiresAt, String linkedEmail) {
         CalendarCredential cred = credentialRepository.findByUserIdAndProvider(userId, "google")
                 .orElse(CalendarCredential.builder().userId(userId).provider("google").createdAt(Instant.now()).build());
         cred.setAccessToken(accessToken);
@@ -219,7 +219,20 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
         cred.setScopes(String.join(" ", scopes == null ? Collections.emptySet() : scopes));
         cred.setExpiresAt(expiresAt);
         cred.setUpdatedAt(Instant.now());
+        if (linkedEmail != null && !linkedEmail.isEmpty()) {
+            cred.setLinkedEmail(linkedEmail);
+        }
         credentialRepository.save(cred);
+    }
+
+    /**
+     * @deprecated Sử dụng method có linkedEmail parameter thay thế
+     */
+    @Override
+    @Transactional
+    @Deprecated
+    public void saveCredentialFromAuthorizedClient(Long userId, String accessToken, String refreshToken, Set<String> scopes, Instant expiresAt) {
+        saveCredentialFromAuthorizedClient(userId, accessToken, refreshToken, scopes, expiresAt, null);
     }
 
     @Override

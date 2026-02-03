@@ -19,7 +19,9 @@ import com.example.demologin.service.GoogleCalendarService;
 import com.example.demologin.utils.AccountUtils;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/calendar")
 @RequiredArgsConstructor
@@ -35,6 +37,8 @@ public class CalendarController {
                                          @RequestParam(required = false) String timeMax,
                                          @RequestParam(required = false, name = "googleAccessToken") String googleAccessToken) {
         Long userId = accountUtils.getCurrentUser().getUserId();
+        log.info("📅 Fetching calendar events for user={}, timeMin={}, timeMax={}, calendarId={}", 
+                 userId, timeMin, timeMax, calendarId);
         Instant tMin = timeMin == null ? null : Instant.parse(timeMin);
         Instant tMax = timeMax == null ? null : Instant.parse(timeMax);
         Map events;
@@ -45,6 +49,8 @@ public class CalendarController {
         } else {
             events = googleCalendarService.getEvents(userId, calendarId, tMin, tMax);
         }
+        log.info("📅 Returning {} events for user={}", 
+                 events.get("items") != null ? ((java.util.List)events.get("items")).size() : 0, userId);
         return ResponseEntity.ok(events);
     }
 
@@ -108,16 +114,21 @@ public class CalendarController {
     public ResponseEntity<Map<String, Object>> getCredential() {
         Long userId = accountUtils.getCurrentUser().getUserId();
         String userEmail = accountUtils.getCurrentUser().getEmail();
+        log.info("📅 Checking calendar credential for user={} (loginEmail={})", userId, userEmail);
         java.util.Optional<com.example.demologin.entity.CalendarCredential> opt = googleCalendarService.findCredential(userId);
         if (opt.isPresent()) {
             com.example.demologin.entity.CalendarCredential cred = opt.get();
             Map<String, Object> resp = new java.util.HashMap<>();
             resp.put("linked", true);
-            resp.put("email", userEmail);
+            // Ưu tiên linkedEmail (email tài khoản Google Calendar), fallback sang email đăng nhập
+            String calendarEmail = cred.getLinkedEmail() != null ? cred.getLinkedEmail() : userEmail;
+            resp.put("email", calendarEmail);
             resp.put("scopes", cred.getScopes());
             resp.put("expiresAt", cred.getExpiresAt());
+            log.info("📅 User {} has linked Google Calendar (linkedEmail={}, scopes={})", userId, calendarEmail, cred.getScopes());
             return ResponseEntity.ok(resp);
         } else {
+            log.warn("📅 User {} has NO linked Google Calendar credential", userId);
             Map<String, Object> resp = Map.of("linked", false);
             return ResponseEntity.ok(resp);
         }
