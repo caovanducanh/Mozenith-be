@@ -164,6 +164,29 @@ public class AuthController {
 |--------|-------------------------|---------------------|------|-----------------|
 | GET    | `/api/admin/roles`      | Get all roles       | ✅   | ROLE_ADMIN      |
 | POST   | `/api/admin/roles`      | Create new role     | ✅   | ROLE_ADMIN      |
+
+---
+
+## 📅 Calendar Integration
+
+Quick notes to enable Google Calendar support:
+
+- Create an OAuth Client in Google Cloud Console (type: Web application) and add redirect URI `{your-backend}/login/oauth2/code/google`.
+- Enable **Google Calendar API** in the console and configure OAuth consent screen.
+- Add calendar scope to your environment variables. Example:
+```
+SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_SCOPE="openid,profile,email,https://www.googleapis.com/auth/calendar"
+SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_ID=...
+SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET=...
+```
+- Endpoints provided by the backend:
+   - `GET /api/calendar/events` — returns events for the authenticated user (requires OAuth link to Google done via mobile/web flow).
+   - `POST /api/calendar/events` — create an event in the user's calendar (body: summary, description, startDateTime, endDateTime, timeZone, location)
+   - `PUT /api/calendar/events/{eventId}` — update an event (body same as create)
+   - `DELETE /api/calendar/events/{eventId}` — delete an event
+   - To initiate mobile OAuth flow (deep link) use: `/mobi/oauth2/authorization/google?scope=calendar` — the server will tag the flow as mobile and redirect back to your mobile deep link with tokens.
+
+Notes: server persists refresh token so the app can refresh access tokens and perform background sync or CRUD operations on calendars.
 | GET    | `/api/admin/permissions`| Get all permissions | ✅   | PERMISSION_ADMIN|
 
 ---
@@ -199,6 +222,13 @@ mvn test
 mvn verify
 # Coverage report
 mvn test jacoco:report
+If you don't have Maven installed locally you can run tests using Docker (works on Windows PowerShell):
+
+```powershell
+docker run --rm -v ${PWD}:/usr/src/mymaven -w /usr/src/mymaven maven:3.8.8-jdk-17 mvn -B test
+```
+
+Or rely on CI — this repository includes a GitHub Actions workflow that runs `mvn verify` on push and pull requests to `main`.
 ```
 
 ---

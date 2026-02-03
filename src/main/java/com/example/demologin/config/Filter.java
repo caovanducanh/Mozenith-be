@@ -1,20 +1,8 @@
 package com.example.demologin.config;
 
-import com.example.demologin.dto.response.ResponseObject;
-import com.example.demologin.entity.User;
-import com.example.demologin.exception.exceptions.InvalidTokenException;
-import com.example.demologin.exception.exceptions.UnauthorizedException;
-import com.example.demologin.service.TokenService;
-import com.example.demologin.utils.JwtUtil;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.security.SignatureException;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.AllArgsConstructor;
+import java.io.IOException;
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,8 +11,19 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
-import java.util.List;
+import com.example.demologin.dto.response.ResponseObject;
+import com.example.demologin.entity.User;
+import com.example.demologin.exception.exceptions.InvalidTokenException;
+import com.example.demologin.exception.exceptions.UnauthorizedException;
+import com.example.demologin.service.TokenService;
+import com.example.demologin.utils.JwtUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.AllArgsConstructor;
 
 @Component
 @AllArgsConstructor
@@ -45,6 +44,30 @@ public class Filter extends OncePerRequestFilter {
         }
         try {
             if (isPermitted(request)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            // Allow logout endpoints even with expired token
+            if (isLogoutEndpoint(request)) {
+                String token = getToken(request);
+                if (token != null) {
+                    try {
+                        // Try to extract user from token (even if expired)
+                        String username = jwtUtil.extractUsernameFromExpiredToken(token);
+                        if (username != null && !username.isBlank()) {
+                            User user = tokenService.getUserByToken(token);
+                            if (user != null) {
+                                UsernamePasswordAuthenticationToken authToken =
+                                        new UsernamePasswordAuthenticationToken(user, token, user.getAuthorities());
+                                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                                SecurityContextHolder.getContext().setAuthentication(authToken);
+                            }
+                        }
+                    } catch (Exception ignored) {
+                        // If we can't extract user, continue anyway for logout
+                    }
+                }
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -82,6 +105,11 @@ public class Filter extends OncePerRequestFilter {
         }
     }
 
+    private boolean isLogoutEndpoint(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        return uri.contains("/session/logout") || uri.contains("/api/logout");
+    }
+
     private boolean isPermitted(HttpServletRequest request) {
         AntPathMatcher pathMatcher = new AntPathMatcher();
         String uri = request.getRequestURI();
@@ -104,8 +132,11 @@ public class Filter extends OncePerRequestFilter {
                 "/login/oauth2/code/**",
             "/oauth2/authorization/**",
             // Mobile-initiated OAuth2 redirect helper
-            "/mobi/oauth2/authorization/**"
-            ,"/debug/**"
+            "/mobi/oauth2/authorization/**",
+            // Google Calendar OAuth2 endpoints (public - validate via state/JWT)
+            "/oauth2/google/calendar/callback",
+            "/oauth2/google/calendar/authorize/mobile",
+            "/debug/**"
         );
 
         return systemPublicEndpoints.stream()

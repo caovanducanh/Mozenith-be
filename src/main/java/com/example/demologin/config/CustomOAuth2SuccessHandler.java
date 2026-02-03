@@ -1,29 +1,32 @@
 package com.example.demologin.config;
 
+import java.io.IOException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.stereotype.Component;
+
 import com.example.demologin.dto.response.LoginResponse;
 import com.example.demologin.entity.User;
 import com.example.demologin.enums.ActivityType;
 import com.example.demologin.repository.UserRepository;
 import com.example.demologin.service.AuthenticationService;
 import com.example.demologin.service.UserActivityLogService;
-import jakarta.servlet.http.Cookie;
+import com.example.demologin.utils.UserAgentUtil;
+
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.core.user.OAuth2User;
-import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
-import org.springframework.stereotype.Component;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
-import java.io.IOException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import com.example.demologin.utils.UserAgentUtil;
 
 @Component
 @RequiredArgsConstructor
@@ -49,6 +52,10 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
     private final UserActivityLogService userActivityLogService;
 
     private final UserRepository userRepository;
+    private final OAuth2AuthorizedClientService authorizedClientService;
+    
+    @Lazy
+    private final com.example.demologin.service.GoogleCalendarService googleCalendarService;
 
     @Value("${frontend.url.base}")
     private String frontendUrl;
@@ -83,7 +90,9 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
                 }
             }
 
-            if (!isMobile && request.getCookies() != null) {
+            boolean isCalendar = false;
+            
+            if (request.getCookies() != null) {
                 for (Cookie c : request.getCookies()) {
                     if ("oauth2_mobile".equals(c.getName()) && "true".equalsIgnoreCase(c.getValue())) {
                         isMobile = true;
@@ -93,16 +102,31 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
                         clear.setMaxAge(0);
                         response.addCookie(clear);
                         logger.info("Detected mobile OAuth via cookie for {}", email);
-                        break;
+                    }
+                    if ("oauth2_calendar".equals(c.getName()) && "true".equalsIgnoreCase(c.getValue())) {
+                        isCalendar = true;
+                        // clear cookie by setting maxAge=0
+                        Cookie clearCal = new Cookie("oauth2_calendar", "");
+                        clearCal.setPath("/");
+                        clearCal.setMaxAge(0);
+                        response.addCookie(clearCal);
+                        logger.info("Detected calendar OAuth via cookie for {}", email);
                     }
                 }
             }
 
-            // Also inspect OAuth2 state — the custom resolver appends ::m when mobile=true
+            // Also inspect OAuth2 state — the custom resolver appends ::m when mobile=true and ::c when calendar=true
             String state = request.getParameter("state");
-            if (!isMobile && state != null && state.endsWith("::m")) {
-                isMobile = true;
-                logger.info("Detected mobile OAuth via state parameter for {} (state={})", email, state);
+            if (state != null) {
+                if (!isCalendar && state.contains("::c")) {
+                    isCalendar = true;
+                    logger.info("Detected calendar OAuth flow via state parameter for {} (state={})", email, state);
+                }
+                // Check contains instead of endsWith since state can be ::m::c
+                if (!isMobile && state.contains("::m")) {
+                    isMobile = true;
+                    logger.info("Detected mobile OAuth via state parameter for {} (state={})", email, state);
+                }
             }
 
             // Fallback: detect mobile via User-Agent header if detection above failed
@@ -128,11 +152,32 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
             User user = userRepository.findByEmail(email).orElse(null);
             userActivityLogService.logUserActivity(user, ActivityType.LOGIN_ATTEMPT, 
                 "OAuth2 login successful via " + getProviderName(authentication));
+
+            // Persist Google OAuth tokens if available
+            try {
+                if (authentication instanceof OAuth2AuthenticationToken && user != null) {
+                    OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
+                    String registrationId = oauthToken.getAuthorizedClientRegistrationId();
+                    OAuth2AuthorizedClient client = authorizedClientService.loadAuthorizedClient(registrationId, oauthToken.getName());
+                    if (client != null && client.getAccessToken() != null) {
+                        String accessToken = client.getAccessToken().getTokenValue();
+                        String refreshToken = client.getRefreshToken() == null ? null : client.getRefreshToken().getTokenValue();
+                        java.time.Instant expiresAt = client.getAccessToken().getExpiresAt();
+                        java.util.Set<String> scopes = client.getAccessToken().getScopes();
+                        googleCalendarService.saveCredentialFromAuthorizedClient(user.getUserId(), accessToken, refreshToken, scopes, expiresAt);
+                        logger.info("Saved Google credential for user={}", user.getUserId());
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to persist OAuth credentials: {}", e.getMessage());
+            }
             
                 String base = isMobile ? frontendMobileUrl : frontendUrl;
-                String redirectUrl = base + "token=" + userResponse.getToken() + "&refreshToken="
+                // If calendar flow, redirect to calendar page instead of home
+                String page = (isMobile && isCalendar) ? "calendar" : "";
+                String redirectUrl = base + page + (page.isEmpty() ? "" : "?") + "token=" + userResponse.getToken() + "&refreshToken="
                     + userResponse.getRefreshToken();
-                logger.info("OAuth2 success for {} (mobile={}): redirecting to {}", email, isMobile, redirectUrl);
+                logger.info("OAuth2 success for {} (mobile={}, calendar={}): redirecting to {}", email, isMobile, isCalendar, redirectUrl);
                 // record for debugging
                 lastRedirectUrl = redirectUrl;
                 lastRedirectIsMobile = isMobile;

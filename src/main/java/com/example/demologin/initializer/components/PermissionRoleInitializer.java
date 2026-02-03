@@ -1,16 +1,23 @@
 package com.example.demologin.initializer.components;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.example.demologin.entity.Permission;
 import com.example.demologin.entity.Role;
 import com.example.demologin.repository.PermissionRepository;
 import com.example.demologin.repository.RoleRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Permission and Role Initializer
@@ -48,27 +55,32 @@ public class PermissionRoleInitializer {
     private static final String LOG_DELETE = "LOG_DELETE";
 
     private static final String USER_VIEW_OWN_LOGIN_HISTORY = "USER_VIEW_OWN_LOGIN_HISTORY";
+    
+        // Calendar permissions
+        private static final String CALENDAR_READ = "CALENDAR_READ";
+        private static final String CALENDAR_CREATE = "CALENDAR_CREATE";
+        private static final String CALENDAR_UPDATE = "CALENDAR_UPDATE";
+        private static final String CALENDAR_DELETE = "CALENDAR_DELETE";
 
     @Transactional
     public void initializePermissionsAndRoles() {
-        log.info("🔑 Initializing system permissions and roles...");
+        log.debug("🔑 Initializing system permissions and roles...");
 
-        if (permissionRepository.count() > 0) {
-            log.info("ℹ️ Permissions already exist, skipping initialization");
-            return;
-        }
+        // Always try to create/update permissions and roles so the initializer can be
+        // re-run safely when we add new permissions in code. We will upsert (create if
+        // missing, update description if changed) permissions and then ensure roles
+        // exist and have the expected permission assignments (merge, do not remove).
+        createOrUpdatePermissions();
+        createOrUpdateRoles();
 
-        createPermissions();
-        createRoles();
-
-        log.info("✅ Successfully initialized {} permissions and {} roles",
-                permissionRepository.count(), roleRepository.count());
+        log.debug("✅ Successfully initialized {} permissions and {} roles",
+            permissionRepository.count(), roleRepository.count());
     }
 
-    private void createPermissions() {
-        log.debug("📋 Creating system permissions...");
+    private void createOrUpdatePermissions() {
+        log.debug("📋 Upserting system permissions...");
 
-        List<Permission> permissions = Arrays.asList(
+        List<Permission> desired = Arrays.asList(
                 new Permission(USER_MANAGE, "Quản lý user (Admin)"),
                 new Permission(USER_TOKEN_MANAGEMENT, "Quản lý token của user"),
                 new Permission(TOKEN_INVALIDATE_OWN, "Hủy token của bản thân"),
@@ -85,43 +97,58 @@ public class PermissionRoleInitializer {
                 new Permission(LOG_VIEW_ACTIVITY, "Xem user activity logs"),
                 new Permission(ADMIN_ACTIVITY_LOG_EXPORT, "Export user activity logs"),
                 new Permission(LOG_DELETE, "Xóa user activity logs"),
-                new Permission(USER_VIEW_OWN_LOGIN_HISTORY, "Xem lịch sử đăng nhập của bản thân")
+                new Permission(USER_VIEW_OWN_LOGIN_HISTORY, "Xem lịch sử đăng nhập của bản thân"),
+                new Permission(CALENDAR_READ, "Xem calendar / Lấy token calendar"),
+                new Permission(CALENDAR_CREATE, "Tạo sự kiện calendar"),
+                new Permission(CALENDAR_UPDATE, "Cập nhật sự kiện calendar"),
+                new Permission(CALENDAR_DELETE, "Xóa sự kiện calendar")
         );
 
-        permissionRepository.saveAll(permissions);
-
-        log.debug("✅ Created {} permissions", permissionRepository.count());
+        for (Permission p : desired) {
+            permissionRepository.findByCode(p.getCode()).ifPresentOrElse(existing -> {
+                if (!existing.getName().equals(p.getName())) {
+                    existing.setName(p.getName());
+                    permissionRepository.save(existing);
+                }
+            }, () -> {
+                permissionRepository.save(p);
+            });
+        }
     }
 
-    private void createRoles() {
-        log.debug("👑 Creating system roles...");
+        private void createOrUpdateRoles() {
+        // quiet operation: no per-role logs to keep startup output clean
 
-        // Tạo map {code -> Permission}
         Map<String, Permission> permMap = permissionRepository.findAll()
-                .stream()
-                .collect(Collectors.toMap(Permission::getCode, p -> p));
+            .stream()
+            .collect(Collectors.toMap(Permission::getCode, p -> p));
 
-        // Admin: full quyền
+        // Admin: full permissions
+        Role admin = roleRepository.findByName("ADMIN").orElseGet(() -> Role.builder().name("ADMIN").build());
         Set<Permission> adminPerms = new HashSet<>(permMap.values());
+        admin.setPermissions(adminPerms);
+        roleRepository.save(admin);
 
-        // Member: quyền giới hạn
-        Set<Permission> memberPerms = Set.of(
-                permMap.get(USER_TOKEN_MANAGEMENT),
-                permMap.get(TOKEN_INVALIDATE_OWN),
-                permMap.get(TOKEN_VIEW_OWN),
-                permMap.get(USER_VIEW_OWN_LOGIN_HISTORY)
+        // Member: desired codes (merge into existing role permissions)
+        Set<String> memberCodes = Set.of(
+            USER_TOKEN_MANAGEMENT,
+            TOKEN_INVALIDATE_OWN,
+            TOKEN_VIEW_OWN,
+            USER_VIEW_OWN_LOGIN_HISTORY,
+            CALENDAR_READ
         );
 
-        roleRepository.save(Role.builder()
-                .name("ADMIN")
-                .permissions(adminPerms)
-                .build());
+        Role member = roleRepository.findByName("MEMBER").orElseGet(() -> Role.builder().name("MEMBER").build());
+        Set<Permission> desiredMemberPerms = memberCodes.stream()
+            .map(permMap::get)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
 
-        roleRepository.save(Role.builder()
-                .name("MEMBER")
-                .permissions(memberPerms)
-                .build());
+        Set<Permission> existing = member.getPermissions() == null ? new HashSet<>() : new HashSet<>(member.getPermissions());
+        existing.addAll(desiredMemberPerms);
+        member.setPermissions(existing);
+        roleRepository.save(member);
 
-        log.debug("✅ Created {} roles", roleRepository.count());
-    }
+        // roles upserted
+        }
 }

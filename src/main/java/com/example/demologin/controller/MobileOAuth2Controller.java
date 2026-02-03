@@ -1,14 +1,15 @@
 package com.example.demologin.controller;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
-import java.io.IOException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Controller
 public class MobileOAuth2Controller {
@@ -40,5 +41,47 @@ public class MobileOAuth2Controller {
         // Redirect to the default Spring OAuth2 authorization endpoint
         // Also include a mobile flag in the query so our custom resolver will tag the OAuth2 state
         response.sendRedirect("/oauth2/authorization/" + provider + "?mobile=true");
+    }
+
+    /**
+     * Dedicated endpoint for linking Google Calendar via mobile.
+     * Always requests calendar scope and stores credentials in calendar_credential table.
+     * Use: GET /mobi/oauth2/authorization/google/calendar
+     */
+    @GetMapping("/mobi/oauth2/authorization/google/calendar")
+    public void mobileOauthCalendar(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        logger.info(">>> mobileOauthCalendar endpoint HIT! URI={}, QueryString={}", request.getRequestURI(), request.getQueryString());
+        
+        boolean secure = request.isSecure() || "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto"));
+
+        // Set mobile cookie
+        StringBuilder mobileCookie = new StringBuilder();
+        mobileCookie.append("oauth2_mobile=true; Path=/; Max-Age=300; HttpOnly=false");
+        if (secure) {
+            mobileCookie.append("; SameSite=None; Secure");
+        } else {
+            mobileCookie.append("; SameSite=Lax");
+        }
+        response.addHeader("Set-Cookie", mobileCookie.toString());
+        
+        // Set calendar cookie to indicate this is a calendar flow
+        StringBuilder calendarCookie = new StringBuilder();
+        calendarCookie.append("oauth2_calendar=true; Path=/; Max-Age=300; HttpOnly=false");
+        if (secure) {
+            calendarCookie.append("; SameSite=None; Secure");
+        } else {
+            calendarCookie.append("; SameSite=Lax");
+        }
+        response.addHeader("Set-Cookie", calendarCookie.toString());
+        
+        // Also set session attributes as backup (more reliable than cookies during redirect)
+        request.getSession().setAttribute("oauth2_mobile", true);
+        request.getSession().setAttribute("oauth2_calendar", true);
+
+        logger.info("Setting oauth2_mobile and oauth2_calendar cookies/session for calendar flow (secure={})", secure);
+
+        // Redirect to Spring OAuth2 authorization with mobile=true + calendar=true flags
+        // calendar=true tells our resolver to always include calendar scope
+        response.sendRedirect("/oauth2/authorization/google?mobile=true&calendar=true");
     }
 }

@@ -132,6 +132,13 @@
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
+        <!-- In-memory DB for tests -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <dependency>
             <groupId>jakarta.validation</groupId>
             <artifactId>jakarta.validation-api</artifactId>

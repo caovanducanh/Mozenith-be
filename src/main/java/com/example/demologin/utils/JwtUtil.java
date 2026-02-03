@@ -1,20 +1,5 @@
 package com.example.demologin.utils;
 
-import com.example.demologin.entity.RefreshToken;
-import com.example.demologin.entity.User;
-import com.example.demologin.exception.exceptions.TokenValidationException;
-import com.example.demologin.repository.RefreshTokenRepository;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
-import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
@@ -24,6 +9,24 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+
+import javax.crypto.SecretKey;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import com.example.demologin.entity.RefreshToken;
+import com.example.demologin.entity.User;
+import com.example.demologin.exception.exceptions.TokenValidationException;
+import com.example.demologin.repository.RefreshTokenRepository;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * JWT Utility class for token operations
@@ -131,6 +134,21 @@ public class JwtUtil {
     }
 
     /**
+     * Extract username from JWT token even if expired (for logout)
+     */
+    public String extractUsernameFromExpiredToken(String token) {
+        try {
+            return extractAllClaims(token).getSubject();
+        } catch (ExpiredJwtException e) {
+            // Token expired, but we can still get the subject from claims
+            return e.getClaims().getSubject();
+        } catch (Exception e) {
+            log.warn("Failed to extract username from token: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Extract username with full validation
      */
     public String extractUsernameWithValidation(String token) {
@@ -225,8 +243,20 @@ public class JwtUtil {
         try {
             extractAllClaims(token);
             return true;
+        } catch (io.jsonwebtoken.security.SignatureException e) {
+            log.warn("JWT signature validation failed - possible secret mismatch: {}", e.getMessage());
+            return false;
+        } catch (io.jsonwebtoken.MalformedJwtException e) {
+            log.warn("Malformed JWT token: {}", e.getMessage());
+            return false;
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            log.warn("JWT token expired: {}", e.getMessage());
+            // Return true for structure validation - expiry is checked separately
+            return true;
         } catch (Exception e) {
-            log.debug("Token validation failed: {}", e.getMessage());
+            log.warn("Token structure validation failed: {} - Token preview: {}", 
+                e.getClass().getSimpleName() + ": " + e.getMessage(), 
+                token != null && token.length() > 50 ? token.substring(0, 50) + "..." : token);
             return false;
         }
     }

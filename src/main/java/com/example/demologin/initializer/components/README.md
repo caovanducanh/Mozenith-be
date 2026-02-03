@@ -8,6 +8,7 @@ This folder contains modular initialization components that are orchestrated by 
 - **Purpose**: Creates system permissions and roles
 - **Dependencies**: None (runs first)
 - **Output**: 28 permissions, 2 roles (ADMIN, MEMBER)
+ - **Behavior**: Safe to re-run — permissions are upserted (created or updated) and role permission assignments are merged (new permissions added to roles without removing existing ones)
 
 ### 👥 DefaultUserInitializer  
 - **Purpose**: Creates default system users

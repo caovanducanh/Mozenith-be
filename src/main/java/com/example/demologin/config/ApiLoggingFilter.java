@@ -1,15 +1,16 @@
 package com.example.demologin.config;
 
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Component
 public class ApiLoggingFilter extends OncePerRequestFilter {
@@ -62,7 +63,7 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String clientIP = request.getRemoteAddr();
-        String queryString = request.getQueryString();
+        String queryString = sanitizeQueryString(request.getQueryString());
         long start = System.currentTimeMillis();
 
         filterChain.doFilter(request, response);
@@ -80,5 +81,33 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
                 colorDuration(duration), duration, RESET,
                 speedIcon(duration)
         );
+    }
+
+    /**
+     * Redact sensitive query parameters from logs (e.g. googleAccessToken)
+     */
+    private String sanitizeQueryString(String qs) {
+        if (qs == null || qs.isEmpty()) return qs;
+        // Split on & to avoid depending on library; keep order
+        StringBuilder sb = new StringBuilder();
+        String[] parts = qs.split("&");
+        boolean first = true;
+        for (String p : parts) {
+            if (!first) sb.append("&");
+            first = false;
+            int idx = p.indexOf('=');
+            if (idx <= 0) {
+                sb.append(p);
+                continue;
+            }
+            String name = p.substring(0, idx);
+            String value = p.substring(idx + 1);
+            if ("googleAccessToken".equalsIgnoreCase(name) || "access_token".equalsIgnoreCase(name)) {
+                sb.append(name).append("=").append("[REDACTED]");
+            } else {
+                sb.append(name).append("=").append(value);
+            }
+        }
+        return sb.toString();
     }
 }

@@ -1,11 +1,13 @@
 package com.example.demologin.config;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 
 public class CustomAuthorizationRequestResolverTest {
 
@@ -28,7 +30,7 @@ public class CustomAuthorizationRequestResolverTest {
         assertNotNull(res);
         assertEquals("origstate::m", res.getState());
         assertTrue(res.getAdditionalParameters().containsKey("prompt"));
-        assertEquals("select_account", res.getAdditionalParameters().get("prompt"));
+        assertEquals("consent", res.getAdditionalParameters().get("prompt"));
     }
 
     @Test
