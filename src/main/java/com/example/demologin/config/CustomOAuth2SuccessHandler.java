@@ -7,9 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
-import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
@@ -153,24 +151,10 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
             userActivityLogService.logUserActivity(user, ActivityType.LOGIN_ATTEMPT, 
                 "OAuth2 login successful via " + getProviderName(authentication));
 
-            // Persist Google OAuth tokens if available
-            try {
-                if (authentication instanceof OAuth2AuthenticationToken && user != null) {
-                    OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
-                    String registrationId = oauthToken.getAuthorizedClientRegistrationId();
-                    OAuth2AuthorizedClient client = authorizedClientService.loadAuthorizedClient(registrationId, oauthToken.getName());
-                    if (client != null && client.getAccessToken() != null) {
-                        String accessToken = client.getAccessToken().getTokenValue();
-                        String refreshToken = client.getRefreshToken() == null ? null : client.getRefreshToken().getTokenValue();
-                        java.time.Instant expiresAt = client.getAccessToken().getExpiresAt();
-                        java.util.Set<String> scopes = client.getAccessToken().getScopes();
-                        googleCalendarService.saveCredentialFromAuthorizedClient(user.getUserId(), accessToken, refreshToken, scopes, expiresAt);
-                        logger.info("Saved Google credential for user={}", user.getUserId());
-                    }
-                }
-            } catch (Exception e) {
-                logger.warn("Failed to persist OAuth credentials: {}", e.getMessage());
-            }
+            // NOTE: KHÔNG lưu token đăng nhập vào CalendarCredential!
+            // Token đăng nhập Google chỉ có scope email/profile, KHÔNG có scope calendar.
+            // User phải liên kết Calendar riêng qua /oauth2/google/calendar/authorize/mobile
+            // để có đủ scope calendar + calendar.events + refresh_token.
             
                 String base = isMobile ? frontendMobileUrl : frontendUrl;
                 // If calendar flow, redirect to calendar page instead of home
