@@ -69,6 +69,26 @@ public class User implements UserDetails {
     @Column(nullable = false, length = 10)
     private Gender gender;
 
+    // -- package / quota management --------------------------------------------------
+    /**
+     * Which subscription package the user is currently on. Defaults to BASIC for new users.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private com.example.demologin.enums.PackageType packageType = com.example.demologin.enums.PackageType.BASIC;
+
+    /**
+     * Number of AI calls the user has made today. Reset once per day.
+     * Only enforced for BASIC package (premium is unlimited).
+     */
+    @Column(nullable = false)
+    private int aiUsesToday = 0;
+
+    /**
+     * Date when the daily quota was last reset. Used to detect when to clear aiUsesToday.
+     */
+    private java.time.LocalDate quotaResetDate = java.time.LocalDate.now();
+
     @Column(name = "is_verify", nullable = false)
     private boolean isVerify = false;
 
@@ -252,6 +272,46 @@ public class User implements UserDetails {
     
     public void setRoles(Set<Role> roles) {
         this.roles = roles;
+    }
+
+    // package/quota getters & setters
+    public com.example.demologin.enums.PackageType getPackageType() {
+        return packageType;
+    }
+
+    public void setPackageType(com.example.demologin.enums.PackageType packageType) {
+        this.packageType = packageType;
+    }
+
+    public int getAiUsesToday() {
+        return aiUsesToday;
+    }
+
+    public void setAiUsesToday(int aiUsesToday) {
+        this.aiUsesToday = aiUsesToday;
+    }
+
+    public java.time.LocalDate getQuotaResetDate() {
+        return quotaResetDate;
+    }
+
+    public void setQuotaResetDate(java.time.LocalDate quotaResetDate) {
+        this.quotaResetDate = quotaResetDate;
+    }
+
+    /**
+     * Convenience: increment today's usage by one. Caller should save entity.
+     */
+    public void incrementAiUsesToday() {
+        this.aiUsesToday++;
+    }
+
+    /**
+     * Reset the daily counter and update reset date to today.
+     */
+    public void resetDailyQuota() {
+        this.aiUsesToday = 0;
+        this.quotaResetDate = java.time.LocalDate.now();
     }
 
     @Override

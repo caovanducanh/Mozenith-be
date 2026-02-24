@@ -26,6 +26,9 @@ public class MemberResponse {
     private LocalDate dateOfBirth;
     private UserStatus status;
     private String role;
+    // subscription details
+    private com.example.demologin.enums.PackageType packageType;
+    private int remainingToday;
 
     public MemberResponse(Long userId, String username, String email, String identity_Card, String fullName, String phone, String address, LocalDate dateOfBirth, UserStatus status, String role) {
         this.userId = userId;
@@ -38,6 +41,12 @@ public class MemberResponse {
         this.dateOfBirth = dateOfBirth;
         this.status = status;
         this.role = role;
+    }
+
+    public MemberResponse(Long userId, String username, String email, String identity_Card, String fullName, String phone, String address, LocalDate dateOfBirth, UserStatus status, String role, com.example.demologin.enums.PackageType packageType, int remainingToday) {
+        this(userId, username, email, identity_Card, fullName, phone, address, dateOfBirth, status, role);
+        this.packageType = packageType;
+        this.remainingToday = remainingToday;
     }
 }
 

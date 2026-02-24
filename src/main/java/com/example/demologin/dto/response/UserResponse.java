@@ -24,6 +24,10 @@ public class UserResponse {
     private Gender gender;
     private UserStatus status;
     private LocalDateTime createdDate;
+    // subscription/quota info
+    private com.example.demologin.enums.PackageType packageType;
+    private int aiUsesToday;
+    private java.time.LocalDate quotaResetDate;
     private String token;
     private String refreshToken;
 
@@ -40,6 +44,9 @@ public class UserResponse {
                 .gender(user.getGender())
                 .status(user.getStatus())
                 .createdDate(user.getCreatedAt())
+                .packageType(user.getPackageType())
+                .aiUsesToday(user.getAiUsesToday())
+                .quotaResetDate(user.getQuotaResetDate())
                 .build();
     }
 }

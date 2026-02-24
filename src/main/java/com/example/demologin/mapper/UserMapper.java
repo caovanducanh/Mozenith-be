@@ -13,17 +13,20 @@ public class UserMapper {
     public MemberResponse toUserResponse(User user) {
         // Lấy role đầu tiên nếu có
         String roleName = user.getRoles().stream().findFirst().map(r -> r.getName()).orElse("");
+        int remaining = user.getPackageType() == com.example.demologin.enums.PackageType.PREMIUM ? -1 : Math.max(0, 3 - user.getAiUsesToday());
         return new MemberResponse(
-                user.getUserId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getIdentityCard(),
-                user.getFullName(),
-                user.getPhone(),
-                user.getAddress(),
-                user.getDateOfBirth(),
-                user.getStatus(),
-                roleName
+            user.getUserId(),
+            user.getUsername(),
+            user.getEmail(),
+            user.getIdentityCard(),
+            user.getFullName(),
+            user.getPhone(),
+            user.getAddress(),
+            user.getDateOfBirth(),
+            user.getStatus(),
+            roleName,
+            user.getPackageType(),
+            remaining
         );
     }
     public static User toEntity(UserRequest userRequest) {

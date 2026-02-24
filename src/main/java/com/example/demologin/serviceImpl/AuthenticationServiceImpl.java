@@ -121,6 +121,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             newUser.setIdentityCard(request.getIdentityCard());
             newUser.setRoles(roles);
             newUser.setStatus(UserStatus.ACTIVE);
+            // package/quota defaults for new account
+            newUser.setPackageType(com.example.demologin.enums.PackageType.BASIC);
+            newUser.setAiUsesToday(0);
+            newUser.setQuotaResetDate(java.time.LocalDate.now());
             
             User savedUser = userRepository.save(newUser);
             

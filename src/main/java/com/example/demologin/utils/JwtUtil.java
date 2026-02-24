@@ -73,6 +73,11 @@ public class JwtUtil {
 
         claims.put("fullName", user.getFullName());
 
+        // include package type so client can display without an extra request
+        if (user.getPackageType() != null) {
+            claims.put("package", user.getPackageType().name());
+        }
+
         if (latestRefreshToken != null) {
             claims.put("jti", latestRefreshToken.getJti());
 
