@@ -54,6 +54,8 @@ public class PermissionRoleInitializer {
     private static final String ADMIN_ACTIVITY_LOG_EXPORT = "ADMIN_ACTIVITY_LOG_EXPORT";
     private static final String LOG_DELETE = "LOG_DELETE";
 
+    private static final String ADMIN_TRANSACTION_VIEW = "ADMIN_TRANSACTION_VIEW";
+
     private static final String USER_VIEW_OWN_LOGIN_HISTORY = "USER_VIEW_OWN_LOGIN_HISTORY";
     
         // Calendar permissions
@@ -97,6 +99,7 @@ public class PermissionRoleInitializer {
                 new Permission(LOG_VIEW_ACTIVITY, "Xem user activity logs"),
                 new Permission(ADMIN_ACTIVITY_LOG_EXPORT, "Export user activity logs"),
                 new Permission(LOG_DELETE, "Xóa user activity logs"),
+                new Permission(ADMIN_TRANSACTION_VIEW, "Xem lịch sử giao dịch"),
                 new Permission(USER_VIEW_OWN_LOGIN_HISTORY, "Xem lịch sử đăng nhập của bản thân"),
                 new Permission(CALENDAR_READ, "Xem calendar / Lấy token calendar"),
                 new Permission(CALENDAR_CREATE, "Tạo sự kiện calendar"),

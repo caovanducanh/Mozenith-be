@@ -22,6 +22,7 @@ class PaymentControllerTest {
     AccountUtils accountUtils;
     PaymentService paymentService;
     QuotaService quotaService;
+    com.example.demologin.service.TransactionService transactionService;
     PaymentController controller;
 
     @BeforeEach
@@ -29,7 +30,8 @@ class PaymentControllerTest {
         accountUtils = mock(AccountUtils.class);
         paymentService = mock(PaymentService.class);
         quotaService = mock(QuotaService.class);
-        controller = new PaymentController(paymentService, quotaService, accountUtils);
+        transactionService = mock(com.example.demologin.service.TransactionService.class);
+        controller = new PaymentController(paymentService, quotaService, accountUtils, transactionService);
     }
 
     @Test
@@ -60,13 +62,15 @@ class PaymentControllerTest {
         assertEquals("INVALID_SIGNATURE", resp);
         // quota service should never be touched
         verify(quotaService, org.mockito.Mockito.never()).setPackage(eq(0L), eq(PackageType.PREMIUM));
+        verify(transactionService).recordIpn(params);
     }
 
     @Test
     void successful_ipn_upgrades_package() {
         Map<String, String> params = Map.of(
-                "vnp_ResponseCode", "00",
-                "vnp_TxnRef", "42_abcdef"
+            "vnp_ResponseCode", "00",
+            "vnp_TransactionStatus", "00",
+            "vnp_TxnRef", "42_abcdef"
         );
         when(paymentService.verifyIpn(params)).thenReturn(true);
 
@@ -74,5 +78,21 @@ class PaymentControllerTest {
         assertEquals("OK", resp);
         // userId 42 should be passed to quotaService
         verify(quotaService).setPackage(eq(42L), eq(PackageType.PREMIUM));
+        verify(transactionService).recordIpn(params);
+    }
+
+    @Test
+    void ipn_with_nonzero_status_is_ignored() {
+        Map<String, String> params = Map.of(
+                "vnp_ResponseCode", "00",
+                "vnp_TransactionStatus", "02", // not successful
+                "vnp_TxnRef", "99_foo"
+        );
+        when(paymentService.verifyIpn(params)).thenReturn(true);
+
+        String resp = controller.handleIpn(params);
+        assertEquals("IGNORED", resp);
+        verify(quotaService, org.mockito.Mockito.never()).setPackage(eq(99L), eq(PackageType.PREMIUM));
+        verify(transactionService).recordIpn(params);
     }
 }

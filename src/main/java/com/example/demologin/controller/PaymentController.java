@@ -13,6 +13,7 @@ import com.example.demologin.annotation.PublicEndpoint;
 import com.example.demologin.enums.PackageType;
 import com.example.demologin.service.PaymentService;
 import com.example.demologin.service.QuotaService;
+import com.example.demologin.service.TransactionService;
 import com.example.demologin.utils.AccountUtils;
 
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class PaymentController {
     private final PaymentService paymentService;
     private final QuotaService quotaService;
     private final AccountUtils accountUtils;
+    private final TransactionService transactionService;
 
     @PostMapping("/premium-url")
     @AuthenticatedEndpoint
@@ -55,21 +57,34 @@ public class PaymentController {
         // verify checksum
         if (!paymentService.verifyIpn(params)) {
             log.warn("Invalid secure hash for IPN");
+            // still persist record so we have history of the callback
+            transactionService.recordIpn(params);
             return "INVALID_SIGNATURE";
         }
         String responseCode = params.get("vnp_ResponseCode");
+        String txnStatus = params.get("vnp_TransactionStatus");
         String txnRef = params.get("vnp_TxnRef");
-        if (txnRef != null && responseCode != null && responseCode.equals("00")) {
+        // VNPAY indicates success by both response code 00 *and* transaction
+        // status 00.  we ignore other statuses so we don't accidentally grant
+        // premium for a pending or failed payment.
+        if (txnRef != null && responseCode != null && responseCode.equals("00")
+                && txnStatus != null && txnStatus.equals("00")) {
             try {
                 Long userId = Long.parseLong(txnRef.split("_")[0]);
                 quotaService.setPackage(userId, PackageType.PREMIUM);
+                // update transaction history with success details
+                transactionService.recordIpn(params);
                 // successful
                 return "OK";
             } catch (Exception e) {
                 log.error("Failed to parse txnRef or upgrade package", e);
+                transactionService.recordIpn(params);
                 return "ERROR";
             }
         }
+        // for non-success statuses we still save the callback so admin can
+        // investigate (e.g. user cancelled or failed)
+        transactionService.recordIpn(params);
         return "IGNORED";
     }
 }

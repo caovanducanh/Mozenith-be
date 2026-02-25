@@ -15,8 +15,13 @@ import org.springframework.stereotype.Service;
 
 import com.example.demologin.service.PaymentService;
 
+import lombok.RequiredArgsConstructor;
+
 @Service
+@RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
+
+    private final com.example.demologin.service.TransactionService transactionService;
 
     // updated to newly registered sandbox merchant
     @Value("${vnpay.tmnCode:350YP26B}")
@@ -63,24 +68,33 @@ public class PaymentServiceImpl implements PaymentService {
             // expire date is required — 15 minutes from now
             params.put("vnp_ExpireDate", now.plusMinutes(15).format(fmt));
 
+            // record pending transaction so admin can see it later
+            transactionService.createPendingTransaction(userId, txnRef, amount * 100);
+
+            // The hash type is required by the gateway when it redirects back
+            // but *should not* be part of the signed data – VNPAY computes the
+            // HMAC over the parameters **excluding** this value.  If we include
+            // it in the hash, the signature the gateway expects will differ
+            // and the user will see a "Sai chữ ký" error (code 70).
+            // Therefore we add it only once the hash has been calculated below.
+
             // build sorted params and a SINGLE query string used for both
             // the hash calculation AND the URL — this is critical so the
             // signature matches what VNPAY recalculates on their side.
+            // The algorithm for building the canonical string is used both when
+            // creating the URL and later when verifying an IPN notification.  We
+            // encode each key and value in exactly the same way during both
+            // operations so that the HMAC calculation is symmetric.  Any
+            // discrepancy here is a common source of INVALID_SIGNATURE errors.
             SortedMap<String, String> sorted = new TreeMap<>(params);
-            StringBuilder hashData = new StringBuilder();
             StringBuilder query = new StringBuilder();
-            for (Map.Entry<String, String> entry : sorted.entrySet()) {
-                if (hashData.length() > 0) {
-                    hashData.append("&");
-                    query.append("&");
-                }
-                String encodedKey = URLEncoder.encode(entry.getKey(), StandardCharsets.US_ASCII);
-                String encodedVal = URLEncoder.encode(entry.getValue(), StandardCharsets.US_ASCII);
-                hashData.append(encodedKey).append("=").append(encodedVal);
-                query.append(encodedKey).append("=").append(encodedVal);
-            }
-            String secureHash = hmacSHA512(hashSecret, hashData.toString());
+            String hashData = buildHashData(sorted, query);
+
+            String secureHash = hmacSHA512(hashSecret, hashData);
             query.append("&vnp_SecureHash=").append(secureHash);
+            // append the hash type for completeness; this is not included in
+            // the string that we signed above.
+            query.append("&vnp_SecureHashType=SHA512");
 
             // log url for troubleshooting (avoid in production!)
             System.out.println("VNPAY request: " + vnpUrl + "?" + query.toString());
@@ -95,15 +109,13 @@ public class PaymentServiceImpl implements PaymentService {
         String providedHash = parameters.get("vnp_SecureHash");
         Map<String, String> copy = new HashMap<>(parameters);
         copy.remove("vnp_SecureHash");
-        // do NOT remove SecureHashType; it is part of the signed data
+        // the gateway sends back vnp_SecureHashType but does not include it
+        // when calculating the signature.  if we leave it in the map the
+        // verification will always fail with an invalid checksum error.
+        copy.remove("vnp_SecureHashType");
         SortedMap<String, String> sorted = new TreeMap<>(copy);
-        // build raw string (unencoded) same as during creation
-        StringBuilder raw = new StringBuilder();
-        for (Map.Entry<String, String> entry : sorted.entrySet()) {
-            if (raw.length() > 0) raw.append("&");
-            raw.append(entry.getKey()).append("=").append(entry.getValue());
-        }
-        String calculated = hmacSHA512(hashSecret, raw.toString());
+        String raw = buildHashData(sorted, null);
+        String calculated = hmacSHA512(hashSecret, raw);
         return calculated.equals(providedHash);
     }
 
@@ -121,5 +133,31 @@ public class PaymentServiceImpl implements PaymentService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to calculate HMACSHA512", e);
         }
+    }
+
+    /**
+     * Build the canonical string used for HMAC calculation.
+     *
+     * <p>The way VNPAY expects the parameters to be concatenated is somewhat
+     * subtle: each key and value must be URL-encoded using the same rules as we
+     * use when constructing the redirect URL.  The string is of the form
+     * "k1=v1&k2=v2..." where both keys and values have been encoded.  We
+     * optionally append the same fragments to a {@code query} buffer so that
+     * {@link #createPremiumUrl} can reuse the result when building the full
+     * request URL.</p>
+     */
+    private String buildHashData(SortedMap<String, String> sorted, StringBuilder query) {
+        StringBuilder hashData = new StringBuilder();
+        for (Map.Entry<String, String> entry : sorted.entrySet()) {
+            if (hashData.length() > 0) {
+                hashData.append("&");
+                if (query != null) query.append("&");
+            }
+            String encodedKey = URLEncoder.encode(entry.getKey(), StandardCharsets.US_ASCII);
+            String encodedVal = URLEncoder.encode(entry.getValue(), StandardCharsets.US_ASCII);
+            hashData.append(encodedKey).append("=").append(encodedVal);
+            if (query != null) query.append(encodedKey).append("=").append(encodedVal);
+        }
+        return hashData.toString();
     }
 }
