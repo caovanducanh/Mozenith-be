@@ -39,47 +39,49 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public String createPremiumUrl(Long userId, long amount) {
-        Map<String, String> params = new HashMap<>();
-        params.put("vnp_Version", "2.1.0");
-        params.put("vnp_Command", "pay");
-        params.put("vnp_TmnCode", tmnCode);
-        // indicate the hash algorithm to VNPAY; required by newer sandbox
-        params.put("vnp_SecureHashType", "SHA512");
-        // currency code is required by sandbox
-        // amount should be in smallest currency unit (multiply by 100)
-        params.put("vnp_Amount", String.valueOf(amount * 100));
-        String txnRef = userId + "_" + System.currentTimeMillis();
-        params.put("vnp_TxnRef", txnRef);
-        params.put("vnp_OrderInfo", "Premium upgrade");
-        params.put("vnp_OrderType", "billpayment");
-        params.put("vnp_Locale", "vn");
-        params.put("vnp_ReturnUrl", returnUrl);
-        // supply current date/time in format yyyyMMddHHmmss
-        params.put("vnp_CreateDate", java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss")));
-        // note: vnp_CurrCode and vnp_IpAddr sometimes cause signature mismatches
-        // with certain sandbox configurations, so they are omitted here.
-        // build sorted data string
-        SortedMap<String, String> sorted = new TreeMap<>(params);
-        // build raw data string for hash calculation (no URL encoding)
-        StringBuilder raw = new StringBuilder();
-        for (Map.Entry<String, String> entry : sorted.entrySet()) {
-            if (raw.length() > 0) {
-                raw.append("&");
+        try {
+            Map<String, String> params = new HashMap<>();
+            params.put("vnp_Version", "2.1.0");
+            params.put("vnp_Command", "pay");
+            params.put("vnp_TmnCode", tmnCode);
+            // amount should be in smallest currency unit (multiply by 100)
+            params.put("vnp_Amount", String.valueOf(amount * 100));
+            // currency code is REQUIRED by VNPAY
+            params.put("vnp_CurrCode", "VND");
+            String txnRef = userId + "_" + System.currentTimeMillis();
+            params.put("vnp_TxnRef", txnRef);
+            params.put("vnp_OrderInfo", "Premium upgrade");
+            params.put("vnp_OrderType", "billpayment");
+            params.put("vnp_Locale", "vn");
+            // client IP is REQUIRED by VNPAY
+            params.put("vnp_IpAddr", "127.0.0.1");
+            params.put("vnp_ReturnUrl", returnUrl);
+            // supply current date/time in format yyyyMMddHHmmss
+            java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            params.put("vnp_CreateDate", now.format(fmt));
+            // expire date is required — 15 minutes from now
+            params.put("vnp_ExpireDate", now.plusMinutes(15).format(fmt));
+
+            // build sorted params and a SINGLE query string used for both
+            // the hash calculation AND the URL — this is critical so the
+            // signature matches what VNPAY recalculates on their side.
+            SortedMap<String, String> sorted = new TreeMap<>(params);
+            StringBuilder hashData = new StringBuilder();
+            StringBuilder query = new StringBuilder();
+            for (Map.Entry<String, String> entry : sorted.entrySet()) {
+                if (hashData.length() > 0) {
+                    hashData.append("&");
+                    query.append("&");
+                }
+                String encodedKey = URLEncoder.encode(entry.getKey(), StandardCharsets.US_ASCII);
+                String encodedVal = URLEncoder.encode(entry.getValue(), StandardCharsets.US_ASCII);
+                hashData.append(encodedKey).append("=").append(encodedVal);
+                query.append(encodedKey).append("=").append(encodedVal);
             }
-            raw.append(entry.getKey()).append("=").append(entry.getValue());
-        }
-        String secureHash = hmacSHA512(hashSecret, raw.toString());
-        // now build the actual query string with URL-encoded values
-        StringBuilder query = new StringBuilder();
-        for (Map.Entry<String, String> entry : sorted.entrySet()) {
-            if (query.length() > 0) {
-                query.append("&");
-            }
-            query.append(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8))
-                 .append("=")
-                 .append(URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
-        }
-        query.append("&vnp_SecureHash=").append(secureHash);
+            String secureHash = hmacSHA512(hashSecret, hashData.toString());
+            query.append("&vnp_SecureHash=").append(secureHash);
+
             // log url for troubleshooting (avoid in production!)
             System.out.println("VNPAY request: " + vnpUrl + "?" + query.toString());
             return vnpUrl + "?" + query.toString();

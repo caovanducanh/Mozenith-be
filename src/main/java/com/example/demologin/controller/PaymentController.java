@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.demologin.annotation.ApiResponse;
 import com.example.demologin.annotation.AuthenticatedEndpoint;
+import com.example.demologin.annotation.PublicEndpoint;
 import com.example.demologin.enums.PackageType;
 import com.example.demologin.service.PaymentService;
 import com.example.demologin.service.QuotaService;
@@ -41,7 +42,14 @@ public class PaymentController {
      * endpoint; we verify the checksum and if successful, upgrade the user's
      * package for one month.
      */
-    @PostMapping("/ipn")
+    // VNPAY will POST the notification, but when you're clicking the
+    // return link in the sandbox or exercising the API from Swagger the
+    // gateway will redirect with a GET.  Either way the endpoint must be
+    // reachable without authentication so we mark it @PublicEndpoint and
+    // accept both methods.
+    @PublicEndpoint
+    @RequestMapping(path = "/ipn", method = { org.springframework.web.bind.annotation.RequestMethod.POST,
+            org.springframework.web.bind.annotation.RequestMethod.GET })
     public String handleIpn(@RequestParam Map<String, String> params) {
         log.info("Received IPN callback: {}", params);
         // verify checksum

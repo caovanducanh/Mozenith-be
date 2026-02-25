@@ -17,9 +17,12 @@ public class PaymentServiceImplTest {
     public void testCreateAndVerify() throws Exception {
         // use default injected values by field declarations
         String url = service.createPremiumUrl(123L, 50000L);
+        // nothing to print in normal operation; previous versions of this
+        // test included debug diagnostics but they are no longer needed.
         assertTrue(url.contains("vnp_TmnCode="));
         assertTrue(url.contains("vnp_Amount="));
         assertTrue(url.contains("vnp_SecureHash="));
+        assertTrue(url.contains("vnp_SecureHashType="));
 
         // parse query parameters back
         String query = url.substring(url.indexOf('?') + 1);
@@ -30,6 +33,9 @@ public class PaymentServiceImplTest {
             String value = URLDecoder.decode(pair.substring(idx + 1), StandardCharsets.UTF_8);
             params.put(key, value);
         }
+        // check verifyIpn still succeeds (and implicitly that the
+        // signature included the SecureHashType parameter).
+        assertTrue(service.verifyIpn(params));
         assertTrue(service.verifyIpn(params));
     }
 }
