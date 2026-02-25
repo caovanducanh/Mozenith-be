@@ -7,7 +7,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.demologin.annotation.ApiResponse;
 import com.example.demologin.annotation.AuthenticatedEndpoint;
-import com.example.demologin.dto.response.QuotaResponse;
 import com.example.demologin.entity.User;
 import com.example.demologin.enums.PackageType;
 import com.example.demologin.service.QuotaService;
@@ -30,7 +29,7 @@ public class QuotaController {
     @ApiResponse(message = "Quota retrieved")
     @Operation(summary = "Get current user's quota",
                description = "Returns remaining AI calls and package information for the authenticated user")
-    public QuotaResponse getQuota() {
+    public Object getQuota() {
         User user = accountUtils.getCurrentUser();
         return quotaService.getQuota(user.getUserId());
     }
@@ -40,7 +39,7 @@ public class QuotaController {
     @ApiResponse(message = "Quota consumed")
     @Operation(summary = "Consume one AI call",
                description = "Decrements daily quota for free users, throws if limit exceeded")
-    public QuotaResponse consumeQuota() {
+    public Object consumeQuota() {
         User user = accountUtils.getCurrentUser();
         return quotaService.consumeQuota(user.getUserId());
     }
@@ -50,7 +49,7 @@ public class QuotaController {
     @ApiResponse(message = "Subscription upgraded")
     @Operation(summary = "Upgrade to premium",
                description = "User upgrades their own package to premium (billing handled separately)")
-    public QuotaResponse upgradeToPremium() {
+    public Object upgradeToPremium() {
         User user = accountUtils.getCurrentUser();
         quotaService.setPackage(user.getUserId(), PackageType.PREMIUM);
         return quotaService.getQuota(user.getUserId());

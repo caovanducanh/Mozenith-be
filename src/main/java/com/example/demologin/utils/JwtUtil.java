@@ -73,10 +73,9 @@ public class JwtUtil {
 
         claims.put("fullName", user.getFullName());
 
-        // include package type so client can display without an extra request
-        if (user.getPackageType() != null) {
-            claims.put("package", user.getPackageType().name());
-        }
+        // do NOT include package type in the JWT; clients should query /api/quota
+        // to avoid stale data when users upgrade/downgrade. Removing this also
+        // simplifies token invalidation logic and keeps payload small.
 
         if (latestRefreshToken != null) {
             claims.put("jti", latestRefreshToken.getJti());
