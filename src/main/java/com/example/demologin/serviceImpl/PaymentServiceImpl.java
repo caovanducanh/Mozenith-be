@@ -44,6 +44,9 @@ public class PaymentServiceImpl implements PaymentService {
             params.put("vnp_Version", "2.1.0");
             params.put("vnp_Command", "pay");
             params.put("vnp_TmnCode", tmnCode);
+            // VNPAY requires us to specify which hash algorithm we are
+            // using; the sandbox currently supports SHA512 only.
+            params.put("vnp_SecureHashType", "SHA512");
             // amount should be in smallest currency unit (multiply by 100)
             params.put("vnp_Amount", String.valueOf(amount * 100));
             // currency code is REQUIRED by VNPAY
@@ -97,13 +100,24 @@ public class PaymentServiceImpl implements PaymentService {
         copy.remove("vnp_SecureHash");
         // do NOT remove SecureHashType; it is part of the signed data
         SortedMap<String, String> sorted = new TreeMap<>(copy);
-        // build raw string (unencoded) same as during creation
-        StringBuilder raw = new StringBuilder();
+        // VNPAY calculates the signature over the URL-encoded key/value pairs
+        // in sorted order.  When Spring receives the request it has already
+        // URL-decoded the values ("Premium+upgrade" becomes "Premium upgrade").
+        // If we simply concatenated the decoded values we would compute a
+        // different hash than the one VNPAY sent back, which is exactly the
+        // problem seen in the screenshot (`INVALID_SIGNATURE`).  To avoid the
+        // mismatch we re-encode the data the same way we encoded it when
+        // creating the original payment URL.
+        StringBuilder hashData = new StringBuilder();
         for (Map.Entry<String, String> entry : sorted.entrySet()) {
-            if (raw.length() > 0) raw.append("&");
-            raw.append(entry.getKey()).append("=").append(entry.getValue());
+            if (hashData.length() > 0) {
+                hashData.append("&");
+            }
+            String encodedKey = URLEncoder.encode(entry.getKey(), StandardCharsets.US_ASCII);
+            String encodedVal = URLEncoder.encode(entry.getValue(), StandardCharsets.US_ASCII);
+            hashData.append(encodedKey).append("=").append(encodedVal);
         }
-        String calculated = hmacSHA512(hashSecret, raw.toString());
+        String calculated = hmacSHA512(hashSecret, hashData.toString());
         return calculated.equals(providedHash);
     }
 
