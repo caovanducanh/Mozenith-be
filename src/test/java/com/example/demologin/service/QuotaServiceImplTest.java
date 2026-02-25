@@ -1,19 +1,25 @@
 package com.example.demologin.service;
 
+import java.time.LocalDate;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.example.demologin.entity.User;
 import com.example.demologin.enums.PackageType;
 import com.example.demologin.exception.exceptions.QuotaExceededException;
 import com.example.demologin.repository.UserRepository;
 import com.example.demologin.serviceImpl.QuotaServiceImpl;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-
-import java.time.LocalDate;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 public class QuotaServiceImplTest {
     private UserRepository userRepository;
@@ -68,5 +74,19 @@ public class QuotaServiceImplTest {
 
         var q2 = quotaService.getQuota(1L);
         assertEquals(-1, q2.getRemainingToday());
+        assertNotNull(q2.getPremiumExpiryDate());
+        assertTrue(q2.getPremiumExpiryDate().isAfter(LocalDate.now()));
+    }
+
+    @Test
+    public void testPremiumExpiry_downgradesAutomatically() {
+        // manually prepare user as premium expiring yesterday
+        user.setPackageType(PackageType.PREMIUM);
+        user.setPremiumExpiryDate(LocalDate.now().minusDays(1));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        var q = quotaService.getQuota(1L);
+        // after calling getQuota, the service should downgrade to BASIC
+        assertEquals(PackageType.BASIC, q.getPackageType());
+        assertEquals(3, q.getRemainingToday());
     }
 }

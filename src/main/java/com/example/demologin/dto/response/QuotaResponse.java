@@ -17,4 +17,8 @@ public class QuotaResponse {
     /** remaining calls today; -1 means unlimited */
     private int remainingToday;
     private LocalDate quotaResetDate;
+    /**
+     * When a premium subscription expires, null if not premium or no expiry set.
+     */
+    private LocalDate premiumExpiryDate;
 }

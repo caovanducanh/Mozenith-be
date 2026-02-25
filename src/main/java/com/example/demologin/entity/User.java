@@ -1,19 +1,32 @@
 package com.example.demologin.entity;
 
-import com.example.demologin.enums.Gender;
-import com.example.demologin.enums.UserStatus;
-import jakarta.persistence.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+
+import org.hibernate.annotations.CreationTimestamp;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+
+import com.example.demologin.enums.Gender;
+import com.example.demologin.enums.UserStatus;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "users")
@@ -88,6 +101,13 @@ public class User implements UserDetails {
      * Date when the daily quota was last reset. Used to detect when to clear aiUsesToday.
      */
     private java.time.LocalDate quotaResetDate = java.time.LocalDate.now();
+
+    /**
+     * If the user has purchased premium, this marks when the subscription expires
+     * (inclusive). Null for basic users. Setting a new premium period should be
+     * handled by service logic.
+     */
+    private java.time.LocalDate premiumExpiryDate;
 
     @Column(name = "is_verify", nullable = false)
     private boolean isVerify = false;
@@ -312,6 +332,14 @@ public class User implements UserDetails {
     public void resetDailyQuota() {
         this.aiUsesToday = 0;
         this.quotaResetDate = java.time.LocalDate.now();
+    }
+
+    public java.time.LocalDate getPremiumExpiryDate() {
+        return premiumExpiryDate;
+    }
+
+    public void setPremiumExpiryDate(java.time.LocalDate premiumExpiryDate) {
+        this.premiumExpiryDate = premiumExpiryDate;
     }
 
     @Override

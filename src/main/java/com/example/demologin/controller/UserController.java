@@ -62,6 +62,7 @@ public class UserController {
             .packageType(request.getPackageType())
             .remainingToday(request.getPackageType() == com.example.demologin.enums.PackageType.PREMIUM ? -1 : 3)
             .quotaResetDate(java.time.LocalDate.now())
+            .premiumExpiryDate(request.getPackageType() == com.example.demologin.enums.PackageType.PREMIUM ? java.time.LocalDate.now().plusMonths(1) : null)
             .build();
         }
 
