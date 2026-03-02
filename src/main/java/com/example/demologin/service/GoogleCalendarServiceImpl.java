@@ -255,19 +255,24 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
             body.add("refresh_token", cred.getRefreshToken());
             HttpEntity<org.springframework.util.MultiValueMap<String, String>> req = new HttpEntity<>(body, headers);
 
-            ResponseEntity<Map> resp = restTemplate.postForEntity(TOKEN_URL, req, Map.class);
-            if (resp.getStatusCode().is2xxSuccessful() && resp.getBody() != null) {
-                Map b = resp.getBody();
-                String newAccess = (String) b.get("access_token");
-                Integer expiresIn = b.get("expires_in") == null ? null : ((Number) b.get("expires_in")).intValue();
-                if (newAccess != null) {
-                    cred.setAccessToken(newAccess);
-                    if (expiresIn != null) cred.setExpiresAt(Instant.now().plusSeconds(expiresIn));
-                    cred.setUpdatedAt(Instant.now());
-                    credentialRepository.save(cred);
+            try {
+                ResponseEntity<Map> resp = restTemplate.postForEntity(TOKEN_URL, req, Map.class);
+                if (resp.getStatusCode().is2xxSuccessful() && resp.getBody() != null) {
+                    Map b = resp.getBody();
+                    String newAccess = (String) b.get("access_token");
+                    Integer expiresIn = b.get("expires_in") == null ? null : ((Number) b.get("expires_in")).intValue();
+                    if (newAccess != null) {
+                        cred.setAccessToken(newAccess);
+                        if (expiresIn != null) cred.setExpiresAt(Instant.now().plusSeconds(expiresIn));
+                        cred.setUpdatedAt(Instant.now());
+                        credentialRepository.save(cred);
+                    }
                 }
-            } else {
-                // intentionally silent on refresh failures to avoid noisy logs
+            } catch (org.springframework.web.client.HttpClientErrorException e) {
+                // invalid_grant means the refresh token was revoked or expired — user must re-link
+                credentialRepository.delete(cred);
+                throw new com.example.demologin.exception.exceptions.BadRequestException(
+                        "Google Calendar access expired. Please unlink and re-link your account.");
             }
         }
         return cred;
