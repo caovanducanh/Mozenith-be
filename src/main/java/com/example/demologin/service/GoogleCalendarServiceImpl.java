@@ -248,12 +248,12 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
             // suppressed informational logs per request
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-            Map<String, String> body = new LinkedHashMap<>();
-            body.put("client_id", googleClientId);
-            body.put("client_secret", googleClientSecret);
-            body.put("grant_type", "refresh_token");
-            body.put("refresh_token", cred.getRefreshToken());
-            HttpEntity<Map<String, String>> req = new HttpEntity<>(body, headers);
+            org.springframework.util.LinkedMultiValueMap<String, String> body = new org.springframework.util.LinkedMultiValueMap<>();
+            body.add("client_id", googleClientId);
+            body.add("client_secret", googleClientSecret);
+            body.add("grant_type", "refresh_token");
+            body.add("refresh_token", cred.getRefreshToken());
+            HttpEntity<org.springframework.util.MultiValueMap<String, String>> req = new HttpEntity<>(body, headers);
 
             ResponseEntity<Map> resp = restTemplate.postForEntity(TOKEN_URL, req, Map.class);
             if (resp.getStatusCode().is2xxSuccessful() && resp.getBody() != null) {
