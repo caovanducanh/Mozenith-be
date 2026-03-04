@@ -64,6 +64,11 @@ public class PermissionRoleInitializer {
         private static final String CALENDAR_UPDATE = "CALENDAR_UPDATE";
         private static final String CALENDAR_DELETE = "CALENDAR_DELETE";
 
+        // Chat Memory permissions
+        private static final String CHAT_MEMORY_READ = "CHAT_MEMORY_READ";
+        private static final String CHAT_MEMORY_CREATE = "CHAT_MEMORY_CREATE";
+        private static final String CHAT_MEMORY_DELETE = "CHAT_MEMORY_DELETE";
+
     @Transactional
     public void initializePermissionsAndRoles() {
         log.debug("🔑 Initializing system permissions and roles...");
@@ -104,7 +109,10 @@ public class PermissionRoleInitializer {
                 new Permission(CALENDAR_READ, "Xem calendar / Lấy token calendar"),
                 new Permission(CALENDAR_CREATE, "Tạo sự kiện calendar"),
                 new Permission(CALENDAR_UPDATE, "Cập nhật sự kiện calendar"),
-                new Permission(CALENDAR_DELETE, "Xóa sự kiện calendar")
+                new Permission(CALENDAR_DELETE, "Xóa sự kiện calendar"),
+                new Permission(CHAT_MEMORY_READ, "Xem AI chat memory"),
+                new Permission(CHAT_MEMORY_CREATE, "Tạo AI chat memory"),
+                new Permission(CHAT_MEMORY_DELETE, "Xóa AI chat memory")
         );
 
         for (Permission p : desired) {
@@ -141,7 +149,10 @@ public class PermissionRoleInitializer {
             CALENDAR_READ,
             CALENDAR_CREATE,
             CALENDAR_UPDATE,
-            CALENDAR_DELETE
+            CALENDAR_DELETE,
+            CHAT_MEMORY_READ,
+            CHAT_MEMORY_CREATE,
+            CHAT_MEMORY_DELETE
         );
 
         Role member = roleRepository.findByName("MEMBER").orElseGet(() -> Role.builder().name("MEMBER").build());
