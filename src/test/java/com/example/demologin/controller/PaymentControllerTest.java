@@ -2,7 +2,6 @@ package com.example.demologin.controller;
 
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,6 +9,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import org.springframework.http.ResponseEntity;
 
 import com.example.demologin.annotation.PublicEndpoint;
 import com.example.demologin.enums.PackageType;
@@ -54,19 +55,21 @@ class PaymentControllerTest {
     }
 
     @Test
-    void invalid_signature_returns_invalid() {
+    void invalid_signature_returns_failed_page_with_deep_link() {
         Map<String, String> params = Map.of("foo", "bar");
         when(paymentService.verifyIpn(params)).thenReturn(false);
 
-        String resp = controller.handleIpn(params);
-        assertEquals("INVALID_SIGNATURE", resp);
+        ResponseEntity<String> resp = controller.handleIpn(params);
+        String body = resp.getBody();
+        assertTrue(body.contains("bestie://payment?status=failed"), "Should contain failed deep link");
+        assertTrue(body.contains("Payment Failed") || body.contains("FAILED"), "Should indicate failure");
         // quota service should never be touched
         verify(quotaService, org.mockito.Mockito.never()).setPackage(eq(0L), eq(PackageType.PREMIUM));
         verify(transactionService).recordIpn(params);
     }
 
     @Test
-    void successful_ipn_upgrades_package() {
+    void successful_ipn_upgrades_package_and_returns_success_page() {
         Map<String, String> params = Map.of(
             "vnp_ResponseCode", "00",
             "vnp_TransactionStatus", "00",
@@ -74,15 +77,17 @@ class PaymentControllerTest {
         );
         when(paymentService.verifyIpn(params)).thenReturn(true);
 
-        String resp = controller.handleIpn(params);
-        assertEquals("OK", resp);
+        ResponseEntity<String> resp = controller.handleIpn(params);
+        String body = resp.getBody();
+        assertTrue(body.contains("bestie://payment?status=success"), "Should contain success deep link");
+        assertTrue(body.contains("Payment Successful") || body.contains("SUCCESS"), "Should indicate success");
         // userId 42 should be passed to quotaService
         verify(quotaService).setPackage(eq(42L), eq(PackageType.PREMIUM));
         verify(transactionService).recordIpn(params);
     }
 
     @Test
-    void ipn_with_nonzero_status_is_ignored() {
+    void ipn_with_nonzero_status_returns_failed_page() {
         Map<String, String> params = Map.of(
                 "vnp_ResponseCode", "00",
                 "vnp_TransactionStatus", "02", // not successful
@@ -90,8 +95,9 @@ class PaymentControllerTest {
         );
         when(paymentService.verifyIpn(params)).thenReturn(true);
 
-        String resp = controller.handleIpn(params);
-        assertEquals("IGNORED", resp);
+        ResponseEntity<String> resp = controller.handleIpn(params);
+        String body = resp.getBody();
+        assertTrue(body.contains("bestie://payment?status=failed"), "Should contain failed deep link");
         verify(quotaService, org.mockito.Mockito.never()).setPackage(eq(99L), eq(PackageType.PREMIUM));
         verify(transactionService).recordIpn(params);
     }
