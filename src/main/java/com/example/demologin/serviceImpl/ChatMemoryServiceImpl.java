@@ -3,7 +3,7 @@ package com.example.demologin.serviceImpl;
 import com.example.demologin.dto.request.ChatMemoryRequest;
 import com.example.demologin.dto.response.ChatMemoryResponse;
 import com.example.demologin.entity.ChatMemory;
-import com.example.demologin.exception.exceptions.ResourceNotFoundException;
+import com.example.demologin.exception.exceptions.NotFoundException;
 import com.example.demologin.repository.ChatMemoryRepository;
 import com.example.demologin.service.ChatMemoryService;
 import lombok.RequiredArgsConstructor;
@@ -83,7 +83,7 @@ public class ChatMemoryServiceImpl implements ChatMemoryService {
     @Transactional
     public void deleteMemory(Long userId, Long memoryId) {
         ChatMemory memory = chatMemoryRepository.findById(memoryId)
-                .orElseThrow(() -> new ResourceNotFoundException("Memory not found with id: " + memoryId));
+                .orElseThrow(() -> new NotFoundException("Memory not found with id: " + memoryId));
         
         if (!memory.getUserId().equals(userId)) {
             throw new SecurityException("User does not own this memory");
