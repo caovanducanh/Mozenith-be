@@ -69,6 +69,12 @@ public class PermissionRoleInitializer {
         private static final String CHAT_MEMORY_CREATE = "CHAT_MEMORY_CREATE";
         private static final String CHAT_MEMORY_DELETE = "CHAT_MEMORY_DELETE";
 
+        // Diary permissions
+        private static final String DIARY_READ = "DIARY_READ";
+        private static final String DIARY_CREATE = "DIARY_CREATE";
+        private static final String DIARY_UPDATE = "DIARY_UPDATE";
+        private static final String DIARY_DELETE = "DIARY_DELETE";
+
     @Transactional
     public void initializePermissionsAndRoles() {
         log.debug("🔑 Initializing system permissions and roles...");
@@ -112,7 +118,11 @@ public class PermissionRoleInitializer {
                 new Permission(CALENDAR_DELETE, "Xóa sự kiện calendar"),
                 new Permission(CHAT_MEMORY_READ, "Xem AI chat memory"),
                 new Permission(CHAT_MEMORY_CREATE, "Tạo AI chat memory"),
-                new Permission(CHAT_MEMORY_DELETE, "Xóa AI chat memory")
+                new Permission(CHAT_MEMORY_DELETE, "Xóa AI chat memory"),
+                new Permission(DIARY_READ, "Xem nhật ký"),
+                new Permission(DIARY_CREATE, "Tạo nhật ký"),
+                new Permission(DIARY_UPDATE, "Cập nhật nhật ký"),
+                new Permission(DIARY_DELETE, "Xóa nhật ký")
         );
 
         for (Permission p : desired) {
@@ -152,7 +162,11 @@ public class PermissionRoleInitializer {
             CALENDAR_DELETE,
             CHAT_MEMORY_READ,
             CHAT_MEMORY_CREATE,
-            CHAT_MEMORY_DELETE
+            CHAT_MEMORY_DELETE,
+            DIARY_READ,
+            DIARY_CREATE,
+            DIARY_UPDATE,
+            DIARY_DELETE
         );
 
         Role member = roleRepository.findByName("MEMBER").orElseGet(() -> Role.builder().name("MEMBER").build());
