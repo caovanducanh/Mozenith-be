@@ -1,10 +1,13 @@
 package com.example.demologin.controller;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -45,71 +48,87 @@ public class PaymentController {
     }
 
     /**
-     * IPN callback from VNPAY sandbox. VNPAY will POST parameters to this
-     * endpoint; we verify the checksum and if successful, upgrade the user's
-     * package for one month.
-     * 
-     * Returns an HTML page that redirects the user's browser to the mobile app
-     * using a deep link (bestie://payment?status=success or failed).
+     * Webhook callback from PayOS. PayOS sends a POST with a JSON body
+     * containing payment result and signature. We verify and process it.
      */
-    // VNPAY will POST the notification, but when you're clicking the
-    // return link in the sandbox or exercising the API from Swagger the
-    // gateway will redirect with a GET.  Either way the endpoint must be
-    // reachable without authentication so we mark it @PublicEndpoint and
-    // accept both methods.
     @PublicEndpoint
-    @RequestMapping(path = "/ipn", method = { org.springframework.web.bind.annotation.RequestMethod.POST,
-            org.springframework.web.bind.annotation.RequestMethod.GET },
-            produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<String> handleIpn(@RequestParam Map<String, String> params) {
-        log.info("Received IPN callback: {}", params);
-        
-        String status = "failed";
-        String message = "Payment processing failed";
-        
-        // verify checksum
-        if (!paymentService.verifyIpn(params)) {
-            log.warn("Invalid secure hash for IPN");
-            // still persist record so we have history of the callback
-            transactionService.recordIpn(params);
-            message = "Invalid payment signature";
-        } else {
-            String responseCode = params.get("vnp_ResponseCode");
-            String txnStatus = params.get("vnp_TransactionStatus");
-            String txnRef = params.get("vnp_TxnRef");
-            // VNPAY indicates success by both response code 00 *and* transaction
-            // status 00.  we ignore other statuses so we don't accidentally grant
-            // premium for a pending or failed payment.
-            if (txnRef != null && responseCode != null && responseCode.equals("00")
-                    && txnStatus != null && txnStatus.equals("00")) {
-                try {
-                    Long userId = Long.parseLong(txnRef.split("_")[0]);
-                    quotaService.setPackage(userId, PackageType.PREMIUM);
-                    // update transaction history with success details
-                    transactionService.recordIpn(params);
-                    status = "success";
-                    message = "Payment successful! Redirecting to app...";
-                } catch (Exception e) {
-                    log.error("Failed to parse txnRef or upgrade package", e);
-                    transactionService.recordIpn(params);
-                    message = "Error processing payment";
-                }
-            } else {
-                // for non-success statuses we still save the callback so admin can
-                // investigate (e.g. user cancelled or failed)
-                transactionService.recordIpn(params);
-                message = "Payment was not completed";
-            }
+    @PostMapping("/webhook")
+    public ResponseEntity<Map<String, Object>> handleWebhook(@RequestBody Map<String, Object> webhookBody) {
+        log.info("Received PayOS webhook: {}", webhookBody);
+
+        Map<String, Object> response = new HashMap<>();
+
+        if (!paymentService.verifyWebhook(webhookBody)) {
+            log.warn("Invalid PayOS webhook signature");
+            transactionService.recordPayOSWebhook(webhookBody);
+            response.put("error", 1);
+            response.put("message", "Invalid signature");
+            return ResponseEntity.ok(response);
         }
-        
-        // Build deep link URL for the mobile app
-        String deepLink = DEEP_LINK_BASE + "?status=" + status;
-        
-        // Return HTML page that redirects to the app's deep link
-        String html = buildRedirectHtml(deepLink, status, message);
-        return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_HTML)
-                .body(html);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) webhookBody.get("data");
+        if (data == null) {
+            response.put("error", 1);
+            response.put("message", "Missing data");
+            return ResponseEntity.ok(response);
+        }
+
+        String code = String.valueOf(data.getOrDefault("code", ""));
+        String orderCode = String.valueOf(data.getOrDefault("orderCode", ""));
+
+        // PayOS success code is "00"
+        if ("00".equals(code) && !orderCode.isEmpty()) {
+            try {
+                transactionService.recordPayOSWebhook(webhookBody);
+                // Extract userId from the txnRef stored when creating payment
+                Long userId = transactionService.getUserIdByOrderCode(orderCode);
+                if (userId != null) {
+                    quotaService.setPackage(userId, PackageType.PREMIUM);
+                    log.info("User {} upgraded to PREMIUM via PayOS", userId);
+                }
+                response.put("error", 0);
+                response.put("message", "OK");
+            } catch (Exception e) {
+                log.error("Failed to process PayOS webhook", e);
+                response.put("error", 1);
+                response.put("message", "Processing error");
+            }
+        } else {
+            transactionService.recordPayOSWebhook(webhookBody);
+            response.put("error", 0);
+            response.put("message", "OK");
+        }
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Success redirect page — after PayOS payment, user's browser is redirected here.
+     * Shows a success page and redirects to the mobile app via deep link.
+     */
+    @PublicEndpoint
+    @GetMapping(path = "/success", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> paymentSuccess(@RequestParam(required = false) String orderCode) {
+        log.info("Payment success redirect, orderCode: {}", orderCode);
+        String deepLink = DEEP_LINK_BASE + "?status=success";
+        String html = buildRedirectHtml(deepLink, "success", "Payment successful! Redirecting to app...");
+        return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(html);
+    }
+
+    /**
+     * Cancel redirect page — user cancelled the payment on PayOS.
+     */
+    @PublicEndpoint
+    @GetMapping(path = "/cancel", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> paymentCancel(@RequestParam(required = false) String orderCode) {
+        log.info("Payment cancelled, orderCode: {}", orderCode);
+        if (orderCode != null) {
+            transactionService.markCancelledByOrderCode(orderCode);
+        }
+        String deepLink = DEEP_LINK_BASE + "?status=failed";
+        String html = buildRedirectHtml(deepLink, "failed", "Payment was cancelled.");
+        return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(html);
     }
     
     /**

@@ -3,8 +3,6 @@ package com.example.demologin.dto.response;
 import lombok.Data;
 import java.time.LocalDateTime;
 
-import lombok.Data;
-
 @Data
 public class PaymentTransactionResponse {
     private Long id;
@@ -13,6 +11,16 @@ public class PaymentTransactionResponse {
     private Long amount;
     private String status;
 
+    // PayOS fields
+    private String orderCode;
+    private String payosCode;
+    private String payosDescription;
+    private String payosTransactionRef;
+    private String paymentMethod;
+    private String counterAccountNumber;
+    private String counterAccountName;
+
+    // Legacy VNPay fields (for old transactions)
     private String vnpResponseCode;
     private String vnpTransactionStatus;
     private String vnpBankCode;

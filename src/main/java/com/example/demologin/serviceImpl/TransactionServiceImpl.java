@@ -18,7 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -32,9 +33,13 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     @Transactional
     public void createPendingTransaction(Long userId, String txnRef, long amount) {
+        // Extract orderCode from txnRef (format: "{userId}_{orderCode}")
+        String orderCode = txnRef.contains("_") ? txnRef.split("_", 2)[1] : txnRef;
+
         PaymentTransaction tx = PaymentTransaction.builder()
                 .userId(userId)
                 .txnRef(txnRef)
+                .orderCode(orderCode)
                 .amount(amount)
                 .status("PENDING")
                 .build();
@@ -43,46 +48,60 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     @Transactional
-    public void recordIpn(Map<String, String> params) {
-        String txnRef = params.get("vnp_TxnRef");
-        if (txnRef == null) {
-            log.warn("IPN callback without TxnRef: {}", params);
+    public void recordPayOSWebhook(Map<String, Object> webhookBody) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) webhookBody.get("data");
+        if (data == null) {
+            log.warn("PayOS webhook without data field: {}", webhookBody);
             return;
         }
-        PaymentTransaction tx = transactionRepository.findByTxnRef(txnRef);
+
+        String orderCode = String.valueOf(data.getOrDefault("orderCode", ""));
+        if (orderCode.isEmpty()) {
+            log.warn("PayOS webhook without orderCode: {}", data);
+            return;
+        }
+
+        PaymentTransaction tx = transactionRepository.findByOrderCode(orderCode);
         if (tx == null) {
+            // try to find by txnRef pattern
             tx = new PaymentTransaction();
-            tx.setTxnRef(txnRef);
-            // attempt to extract userId from prefix
-            try {
-                tx.setUserId(Long.parseLong(txnRef.split("_")[0]));
-            } catch (Exception ignored) { }
+            tx.setOrderCode(orderCode);
+            tx.setTxnRef("unknown_" + orderCode);
+            tx.setAmount(data.get("amount") != null ? Long.parseLong(String.valueOf(data.get("amount"))) : 0L);
         }
-        // update fields from IPN
-        tx.setVnpResponseCode(params.get("vnp_ResponseCode"));
-        tx.setVnpTransactionStatus(params.get("vnp_TransactionStatus"));
-        tx.setVnpBankCode(params.get("vnp_BankCode"));
-        tx.setVnpBankTranNo(params.get("vnp_BankTranNo"));
-        tx.setVnpCardType(params.get("vnp_CardType"));
-        tx.setVnpOrderInfo(params.get("vnp_OrderInfo"));
-        tx.setVnpTransactionNo(params.get("vnp_TransactionNo"));
-        String payDate = params.get("vnp_PayDate");
-        if (payDate != null) {
-            try {
-                DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
-                tx.setVnpPayDate(LocalDateTime.parse(payDate, fmt));
-            } catch (Exception e) {
-                log.warn("Unable to parse pay date {}", payDate);
-            }
-        }
-        String response = params.get("vnp_ResponseCode");
-        String status = params.get("vnp_TransactionStatus");
-        if ("00".equals(response) && "00".equals(status)) {
+
+        // Update from PayOS webhook data
+        String code = String.valueOf(data.getOrDefault("code", ""));
+        tx.setPayosCode(code);
+        tx.setPayosDescription(data.get("desc") != null ? String.valueOf(data.get("desc")) : null);
+        tx.setPayosTransactionRef(data.get("reference") != null ? String.valueOf(data.get("reference")) : null);
+        tx.setCounterAccountNumber(data.get("counterAccountNumber") != null ? String.valueOf(data.get("counterAccountNumber")) : null);
+        tx.setCounterAccountName(data.get("counterAccountName") != null ? String.valueOf(data.get("counterAccountName")) : null);
+
+        if ("00".equals(code)) {
             tx.setStatus("SUCCESS");
-        } else if (response != null || status != null) {
+        } else if (code != null && !code.isEmpty()) {
             tx.setStatus("FAILED");
         }
+
         transactionRepository.save(tx);
+    }
+
+    @Override
+    public Long getUserIdByOrderCode(String orderCode) {
+        PaymentTransaction tx = transactionRepository.findByOrderCode(orderCode);
+        return tx != null ? tx.getUserId() : null;
+    }
+
+    @Override
+    @Transactional
+    public void markCancelledByOrderCode(String orderCode) {
+        PaymentTransaction tx = transactionRepository.findByOrderCode(orderCode);
+        if (tx != null) {
+            tx.setStatus("CANCELLED");
+            transactionRepository.save(tx);
+        }
     }
 
     @Override
@@ -115,13 +134,10 @@ public class TransactionServiceImpl implements TransactionService {
                     end,
                     pageable);
         } catch (Exception ex) {
-            // catch any persistence errors (missing table, bad query etc).
-            // log for diagnostics and return empty page so caller can handle
             log.error("Transaction search failed", ex);
             return Page.empty();
         }
         if (results.getContent().isEmpty()) {
-            // do not throw here; front end can show empty list instead of 500
             return results.map(mapper::toResponse);
         }
         return results.map(mapper::toResponse);
@@ -132,5 +148,38 @@ public class TransactionServiceImpl implements TransactionService {
         PaymentTransaction tx = transactionRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Transaction not found with ID: " + id));
         return mapper.toResponse(tx);
+    }
+
+    @Override
+    public Map<String, Object> getTransactionStats() {
+        List<PaymentTransaction> allTransactions = transactionRepository.findAll();
+
+        long totalTransactions = allTransactions.size();
+        long successfulTransactions = 0;
+        long failedTransactions = 0;
+        long pendingTransactions = 0;
+        long cancelledTransactions = 0;
+        long totalRevenue = 0;
+
+        for (PaymentTransaction tx : allTransactions) {
+            switch (tx.getStatus()) {
+                case "SUCCESS" -> {
+                    successfulTransactions++;
+                    totalRevenue += tx.getAmount();
+                }
+                case "FAILED" -> failedTransactions++;
+                case "CANCELLED" -> cancelledTransactions++;
+                default -> pendingTransactions++;
+            }
+        }
+
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalTransactions", totalTransactions);
+        stats.put("successfulTransactions", successfulTransactions);
+        stats.put("failedTransactions", failedTransactions);
+        stats.put("pendingTransactions", pendingTransactions);
+        stats.put("cancelledTransactions", cancelledTransactions);
+        stats.put("totalRevenue", totalRevenue);
+        return stats;
     }
 }

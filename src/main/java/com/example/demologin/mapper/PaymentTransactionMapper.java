@@ -19,6 +19,17 @@ public class PaymentTransactionMapper {
         r.setTxnRef(tx.getTxnRef());
         r.setAmount(tx.getAmount());
         r.setStatus(tx.getStatus());
+
+        // PayOS fields
+        r.setOrderCode(tx.getOrderCode());
+        r.setPayosCode(tx.getPayosCode());
+        r.setPayosDescription(tx.getPayosDescription());
+        r.setPayosTransactionRef(tx.getPayosTransactionRef());
+        r.setPaymentMethod(tx.getPaymentMethod());
+        r.setCounterAccountNumber(tx.getCounterAccountNumber());
+        r.setCounterAccountName(tx.getCounterAccountName());
+
+        // Legacy VNPay fields
         r.setVnpResponseCode(tx.getVnpResponseCode());
         r.setVnpTransactionStatus(tx.getVnpTransactionStatus());
         r.setVnpBankCode(tx.getVnpBankCode());

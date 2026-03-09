@@ -9,8 +9,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Page;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -30,30 +30,79 @@ class TransactionServiceImplTest {
     }
 
     @Test
-    void createPendingTransaction_savesRecord() {
-        service.createPendingTransaction(5L, "5_123", 10000);
+    void createPendingTransaction_savesRecordWithOrderCode() {
+        service.createPendingTransaction(5L, "5_123456", 50000);
         verify(repo).save(argThat(tx -> tx.getUserId().equals(5L)
-                && tx.getTxnRef().equals("5_123")
-                && tx.getAmount().equals(10000L)
+                && tx.getTxnRef().equals("5_123456")
+                && tx.getOrderCode().equals("123456")
+                && tx.getAmount().equals(50000L)
                 && tx.getStatus().equals("PENDING")));
     }
 
     @Test
-    void recordIpn_updatesExisting() {
+    void recordPayOSWebhook_updatesExisting() {
         PaymentTransaction existing = new PaymentTransaction();
-        existing.setTxnRef("1_foo");
-        when(repo.findByTxnRef("1_foo")).thenReturn(existing);
+        existing.setTxnRef("1_999");
+        existing.setOrderCode("999");
+        when(repo.findByOrderCode("999")).thenReturn(existing);
 
-        Map<String,String> params = new HashMap<>();
-        params.put("vnp_TxnRef","1_foo");
-        params.put("vnp_ResponseCode","00");
-        params.put("vnp_TransactionStatus","00");
-        params.put("vnp_PayDate","20260225183005");
+        Map<String, Object> data = new HashMap<>();
+        data.put("orderCode", "999");
+        data.put("code", "00");
+        data.put("desc", "Payment success");
+        data.put("counterAccountName", "NGUYEN VAN A");
+        Map<String, Object> body = new HashMap<>();
+        body.put("data", data);
 
-        service.recordIpn(params);
+        service.recordPayOSWebhook(body);
         assertEquals("SUCCESS", existing.getStatus());
-        assertNotNull(existing.getVnpPayDate());
+        assertEquals("00", existing.getPayosCode());
+        assertEquals("NGUYEN VAN A", existing.getCounterAccountName());
         verify(repo).save(existing);
+    }
+
+    @Test
+    void getUserIdByOrderCode_returnsUserId() {
+        PaymentTransaction tx = new PaymentTransaction();
+        tx.setUserId(42L);
+        when(repo.findByOrderCode("12345")).thenReturn(tx);
+        assertEquals(42L, service.getUserIdByOrderCode("12345"));
+    }
+
+    @Test
+    void getUserIdByOrderCode_returnsNullWhenNotFound() {
+        when(repo.findByOrderCode("99999")).thenReturn(null);
+        assertNull(service.getUserIdByOrderCode("99999"));
+    }
+
+    @Test
+    void markCancelledByOrderCode_updatesStatus() {
+        PaymentTransaction tx = new PaymentTransaction();
+        tx.setStatus("PENDING");
+        when(repo.findByOrderCode("111")).thenReturn(tx);
+        service.markCancelledByOrderCode("111");
+        assertEquals("CANCELLED", tx.getStatus());
+        verify(repo).save(tx);
+    }
+
+    @Test
+    void getTransactionStats_calculatesCorrectly() {
+        PaymentTransaction success1 = PaymentTransaction.builder()
+                .status("SUCCESS").amount(50000L).txnRef("a").build();
+        PaymentTransaction success2 = PaymentTransaction.builder()
+                .status("SUCCESS").amount(50000L).txnRef("b").build();
+        PaymentTransaction failed = PaymentTransaction.builder()
+                .status("FAILED").amount(50000L).txnRef("c").build();
+        PaymentTransaction pending = PaymentTransaction.builder()
+                .status("PENDING").amount(50000L).txnRef("d").build();
+        when(repo.findAll()).thenReturn(List.of(success1, success2, failed, pending));
+
+        Map<String, Object> stats = service.getTransactionStats();
+        assertEquals(4L, stats.get("totalTransactions"));
+        assertEquals(2L, stats.get("successfulTransactions"));
+        assertEquals(1L, stats.get("failedTransactions"));
+        assertEquals(1L, stats.get("pendingTransactions"));
+        assertEquals(100000L, stats.get("totalRevenue"));
     }
 
     @Test
@@ -62,19 +111,17 @@ class TransactionServiceImplTest {
         req.setUserId(7L);
         when(repo.findWithFilters(eq(7L), any(), any(), any(), any(), any(), any()))
             .thenReturn(Page.empty());
-        // now that service catches exceptions from the repository, an empty page should be returned
         Page<PaymentTransactionResponse> result = service.searchTransactions(req, 0, 10);
         assertNotNull(result);
         assertTrue(result.getContent().isEmpty());
-        }
+    }
 
-        @Test
-        void searchTransactions_handlesRepoException() {
+    @Test
+    void searchTransactions_handlesRepoException() {
         PaymentTransactionQueryRequest req = new PaymentTransactionQueryRequest();
         when(repo.findWithFilters(any(), any(), any(), any(), any(), any(), any()))
             .thenThrow(new RuntimeException("db error"));
         Page<PaymentTransactionResponse> result = service.searchTransactions(req, 1, 5);
-        // should swallow exception and return empty
         assertNotNull(result);
         assertTrue(result.getContent().isEmpty());
     }

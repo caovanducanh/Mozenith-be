@@ -13,6 +13,7 @@ import com.example.demologin.entity.PaymentTransaction;
 public interface PaymentTransactionRepository extends JpaRepository<PaymentTransaction, Long> {
     // simple filters
     PaymentTransaction findByTxnRef(String txnRef);
+    PaymentTransaction findByOrderCode(String orderCode);
     Page<PaymentTransaction> findByUserId(Long userId, Pageable pageable);
     Page<PaymentTransaction> findByStatus(String status, Pageable pageable);
 

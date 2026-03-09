@@ -49,12 +49,30 @@ class PaymentTransactionControllerTest {
 
     @Test
     void searchTransactions_returnsDataFromService() {
-        // ensure controller proxies to service without error
-        PaymentTransactionQueryRequest req = new PaymentTransactionQueryRequest();
-        // mock service to return empty page
         when(transactionService.searchTransactions(any(PaymentTransactionQueryRequest.class), anyInt(), anyInt()))
             .thenReturn(org.springframework.data.domain.Page.empty());
         Object resp = controller.searchTransactions(null, null, null, null, null, null, 0, 10, null, null);
         assertTrue(resp != null);
+    }
+
+    @Test
+    void stats_endpoint_is_secured() throws NoSuchMethodException {
+        Method m = PaymentTransactionController.class.getMethod("getTransactionStats");
+        assertTrue(m.isAnnotationPresent(SecuredEndpoint.class));
+        assertTrue(m.isAnnotationPresent(GetMapping.class));
+        SecuredEndpoint ann = m.getAnnotation(SecuredEndpoint.class);
+        assertTrue(ann.value().contains("ADMIN_TRANSACTION_VIEW"));
+    }
+
+    @Test
+    void stats_endpoint_returns_map() {
+        java.util.Map<String, Object> mockStats = java.util.Map.of(
+                "totalTransactions", 10L,
+                "successfulTransactions", 5L,
+                "totalRevenue", 250000L);
+        when(transactionService.getTransactionStats()).thenReturn(mockStats);
+        Object resp = controller.getTransactionStats();
+        assertTrue(resp != null);
+        assertTrue(resp instanceof org.springframework.http.ResponseEntity);
     }
 }

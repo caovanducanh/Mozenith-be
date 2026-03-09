@@ -162,6 +162,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
+
+        <!-- PayOS Java SDK for payment processing -->
+        <dependency>
+            <groupId>vn.payos</groupId>
+            <artifactId>payos</artifactId>
+            <version>1.0.4</version>
+        </dependency>
     </dependencies>
 
     <build>

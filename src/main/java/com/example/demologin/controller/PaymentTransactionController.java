@@ -109,4 +109,12 @@ public class PaymentTransactionController {
         // delegate to search so pagination, sorting logic is reused
         return transactionService.searchTransactions(req, 0, 1).getContent().stream().findFirst().orElse(null);
     }
+
+    @GetMapping("/stats")
+    @ApiResponse(message = "Transaction statistics retrieved successfully")
+    @SecuredEndpoint("ADMIN_TRANSACTION_VIEW")
+    @Operation(summary = "Get transaction statistics", description = "Get aggregated transaction statistics for the dashboard")
+    public Object getTransactionStats() {
+        return transactionService.getTransactionStats();
+    }
 }

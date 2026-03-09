@@ -1,5 +1,6 @@
 package com.example.demologin.controller;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -36,69 +37,64 @@ class PaymentControllerTest {
     }
 
     @Test
-    void ipn_endpoint_is_public_and_accepts_both_methods() throws NoSuchMethodException {
-        // verify the annotation is present and mapping allows POST/GET
-        var method = PaymentController.class.getMethod("handleIpn", Map.class);
-        assertTrue(method.isAnnotationPresent(PublicEndpoint.class), "IPN handler should be marked public");
-        // ensure the request mapping covers both POST and GET
-        var mapping = method.getAnnotation(org.springframework.web.bind.annotation.RequestMapping.class);
-        assertTrue(mapping != null, "RequestMapping should be present");
-        var methods = mapping.method();
-        assertTrue(methods.length >= 2, "Should support more than one HTTP method");
-        // simple sanity check that POST and GET are included
-        boolean hasPost = false, hasGet = false;
-        for (var m : methods) {
-            if (m == org.springframework.web.bind.annotation.RequestMethod.POST) hasPost = true;
-            if (m == org.springframework.web.bind.annotation.RequestMethod.GET) hasGet = true;
-        }
-        assertTrue(hasPost && hasGet, "mapping should allow POST and GET");
+    void webhook_endpoint_is_public() throws NoSuchMethodException {
+        var method = PaymentController.class.getMethod("handleWebhook", Map.class);
+        assertTrue(method.isAnnotationPresent(PublicEndpoint.class), "Webhook handler should be marked public");
     }
 
     @Test
-    void invalid_signature_returns_failed_page_with_deep_link() {
-        Map<String, String> params = Map.of("foo", "bar");
-        when(paymentService.verifyIpn(params)).thenReturn(false);
-
-        ResponseEntity<String> resp = controller.handleIpn(params);
-        String body = resp.getBody();
-        assertTrue(body.contains("bestie://payment?status=failed"), "Should contain failed deep link");
-        assertTrue(body.contains("Payment Failed") || body.contains("FAILED"), "Should indicate failure");
-        // quota service should never be touched
-        verify(quotaService, org.mockito.Mockito.never()).setPackage(eq(0L), eq(PackageType.PREMIUM));
-        verify(transactionService).recordIpn(params);
+    void success_endpoint_is_public() throws NoSuchMethodException {
+        var method = PaymentController.class.getMethod("paymentSuccess", String.class);
+        assertTrue(method.isAnnotationPresent(PublicEndpoint.class), "Success handler should be marked public");
     }
 
     @Test
-    void successful_ipn_upgrades_package_and_returns_success_page() {
-        Map<String, String> params = Map.of(
-            "vnp_ResponseCode", "00",
-            "vnp_TransactionStatus", "00",
-            "vnp_TxnRef", "42_abcdef"
-        );
-        when(paymentService.verifyIpn(params)).thenReturn(true);
+    void cancel_endpoint_is_public() throws NoSuchMethodException {
+        var method = PaymentController.class.getMethod("paymentCancel", String.class);
+        assertTrue(method.isAnnotationPresent(PublicEndpoint.class), "Cancel handler should be marked public");
+    }
 
-        ResponseEntity<String> resp = controller.handleIpn(params);
-        String body = resp.getBody();
-        assertTrue(body.contains("bestie://payment?status=success"), "Should contain success deep link");
-        assertTrue(body.contains("Payment Successful") || body.contains("SUCCESS"), "Should indicate success");
-        // userId 42 should be passed to quotaService
+    @Test
+    void invalid_webhook_signature_returns_error() {
+        Map<String, Object> body = new HashMap<>();
+        body.put("data", Map.of("code", "00"));
+        when(paymentService.verifyWebhook(body)).thenReturn(false);
+
+        ResponseEntity<Map<String, Object>> resp = controller.handleWebhook(body);
+        assertTrue(resp.getBody().get("error").equals(1));
+        verify(transactionService).recordPayOSWebhook(body);
+    }
+
+    @Test
+    void successful_webhook_upgrades_package() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("code", "00");
+        data.put("orderCode", "12345");
+        data.put("amount", 50000);
+        Map<String, Object> body = new HashMap<>();
+        body.put("data", data);
+        when(paymentService.verifyWebhook(body)).thenReturn(true);
+        when(transactionService.getUserIdByOrderCode("12345")).thenReturn(42L);
+
+        ResponseEntity<Map<String, Object>> resp = controller.handleWebhook(body);
+        assertTrue(resp.getBody().get("error").equals(0));
         verify(quotaService).setPackage(eq(42L), eq(PackageType.PREMIUM));
-        verify(transactionService).recordIpn(params);
+        verify(transactionService).recordPayOSWebhook(body);
     }
 
     @Test
-    void ipn_with_nonzero_status_returns_failed_page() {
-        Map<String, String> params = Map.of(
-                "vnp_ResponseCode", "00",
-                "vnp_TransactionStatus", "02", // not successful
-                "vnp_TxnRef", "99_foo"
-        );
-        when(paymentService.verifyIpn(params)).thenReturn(true);
-
-        ResponseEntity<String> resp = controller.handleIpn(params);
+    void success_page_returns_deep_link_html() {
+        ResponseEntity<String> resp = controller.paymentSuccess("123");
         String body = resp.getBody();
-        assertTrue(body.contains("bestie://payment?status=failed"), "Should contain failed deep link");
-        verify(quotaService, org.mockito.Mockito.never()).setPackage(eq(99L), eq(PackageType.PREMIUM));
-        verify(transactionService).recordIpn(params);
+        assertTrue(body.contains("bestie://payment?status=success"));
+        assertTrue(body.contains("Payment Successful") || body.contains("SUCCESS"));
+    }
+
+    @Test
+    void cancel_page_returns_deep_link_html() {
+        ResponseEntity<String> resp = controller.paymentCancel("123");
+        String body = resp.getBody();
+        assertTrue(body.contains("bestie://payment?status=failed"));
+        verify(transactionService).markCancelledByOrderCode("123");
     }
 }

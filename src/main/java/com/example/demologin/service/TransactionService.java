@@ -6,22 +6,35 @@ import org.springframework.data.domain.Page;
 
 public interface TransactionService {
     /**
-     * create a new pending transaction record when we generate the payment URL.
+     * Create a new pending transaction record when we generate the payment URL.
      */
     void createPendingTransaction(Long userId, String txnRef, long amount);
 
     /**
-     * update an existing transaction based on the parameters received from the
-     * IPN callback.  If no record exists for the given txnRef, a new one is
-     * created to ensure history is preserved.
+     * Process a PayOS webhook callback and update the transaction record.
      */
-    void recordIpn(java.util.Map<String, String> params);
+    void recordPayOSWebhook(java.util.Map<String, Object> webhookBody);
 
     /**
-     * search using arbitrary filters, sorting, and pagination.
+     * Get the userId associated with a PayOS orderCode.
+     */
+    Long getUserIdByOrderCode(String orderCode);
+
+    /**
+     * Mark a transaction as CANCELLED by its PayOS orderCode.
+     */
+    void markCancelledByOrderCode(String orderCode);
+
+    /**
+     * Search using arbitrary filters, sorting, and pagination.
      */
     Page<PaymentTransactionResponse> searchTransactions(PaymentTransactionQueryRequest request,
                                                        int page, int size);
 
     PaymentTransactionResponse getTransactionById(Long id);
+
+    /**
+     * Get transaction statistics for the dashboard.
+     */
+    java.util.Map<String, Object> getTransactionStats();
 }
