@@ -258,10 +258,14 @@ public class PaymentController {
      */
     @GetMapping("/verify-status")
     @AuthenticatedEndpoint
-    @ApiResponse(message = "Payment status verified")
     public ResponseEntity<Map<String, Object>> verifyPaymentStatus() {
         Long userId = accountUtils.getCurrentUser().getUserId();
         Map<String, Object> response = new java.util.HashMap<>();
+        
+        // Build response envelope matching other API responses
+        Map<String, Object> envelope = new java.util.HashMap<>();
+        envelope.put("statusCode", 200);
+        envelope.put("message", "Payment status verified");
         
         try {
             // Get the user's latest transaction
@@ -270,7 +274,8 @@ public class PaymentController {
             if (latestTx == null) {
                 response.put("status", "NO_TRANSACTION");
                 response.put("message", "No payment transaction found");
-                return ResponseEntity.ok(response);
+                envelope.put("data", response);
+                return ResponseEntity.ok(envelope);
             }
             
             String txStatus = latestTx.getStatus();
@@ -299,12 +304,14 @@ public class PaymentController {
                 response.put("message", "Payment was not successful");
             }
             
-            return ResponseEntity.ok(response);
+            envelope.put("data", response);
+            return ResponseEntity.ok(envelope);
         } catch (Exception e) {
             log.error("Error verifying payment status for user {}", userId, e);
             response.put("status", "ERROR");
-            response.put("message", "Failed to verify payment status");
-            return ResponseEntity.ok(response);
+            response.put("message", "Failed to verify payment status: " + e.getMessage());
+            envelope.put("data", response);
+            return ResponseEntity.ok(envelope);
         }
     }
 }
