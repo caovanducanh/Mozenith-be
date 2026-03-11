@@ -42,11 +42,6 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     List<PaymentTransaction> findByUserId(Long userId);
 
-    /**
-     * Find the most recent transaction for a user, ordered by creation time descending.
-     */
-    PaymentTransaction findTopByUserIdOrderByCreatedAtDesc(Long userId);
-
         /**
          * Marks older pending transactions as expired.  Used by a scheduled job
          * that periodically walks the table and updates anything that has been
