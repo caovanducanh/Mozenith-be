@@ -6,8 +6,10 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
 import com.example.demologin.entity.PaymentTransaction;
 // repository interface declaration
 public interface PaymentTransactionRepository extends JpaRepository<PaymentTransaction, Long> {
@@ -39,4 +41,19 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
                                              Pageable pageable);
 
     List<PaymentTransaction> findByUserId(Long userId);
+
+        /**
+         * Marks older pending transactions as expired.  Used by a scheduled job
+         * that periodically walks the table and updates anything that has been
+         * pending for more than the allowed timeframe (15 minutes per VNPAY
+         * policy).
+         *
+         * @param cutoff any transaction created before this instant will be
+         *               transitioned out of PENDING state
+         * @return number of rows updated
+         */
+        @Modifying
+        @Query("UPDATE PaymentTransaction p SET p.status = 'EXPIRED' " +
+            "WHERE p.status = 'PENDING' AND p.createdAt < :cutoff")
+        int expireOldTransactions(@Param("cutoff") LocalDateTime cutoff);
 }

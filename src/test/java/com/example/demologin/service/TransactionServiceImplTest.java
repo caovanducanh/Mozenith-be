@@ -125,4 +125,21 @@ class TransactionServiceImplTest {
         assertNotNull(result);
         assertTrue(result.getContent().isEmpty());
     }
+
+        @Test
+        void expirePendingTransactions_invokesRepositoryWithCutoff() {
+            // we can't deterministically know the instant, but we can capture
+            // the argument using Mockito's argument captor and ensure it's roughly
+            // 15 minutes ago
+            when(repo.expireOldTransactions(any())).thenReturn(3);
+
+            service.expirePendingTransactions();
+
+            // verify that the repository method was called once and that the
+            // cutoff time is between now-16 and now-14 minutes (allowing some slack)
+            verify(repo).expireOldTransactions(argThat(dt -> {
+                LocalDateTime now = LocalDateTime.now();
+                return !dt.isAfter(now.minusMinutes(14)) && !dt.isBefore(now.minusMinutes(16));
+            }));
+        }
 }

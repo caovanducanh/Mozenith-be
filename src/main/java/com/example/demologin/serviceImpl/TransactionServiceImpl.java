@@ -1,5 +1,20 @@
 package com.example.demologin.serviceImpl;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.example.demologin.dto.request.PaymentTransactionQueryRequest;
 import com.example.demologin.dto.response.PaymentTransactionResponse;
 import com.example.demologin.entity.PaymentTransaction;
@@ -7,22 +22,12 @@ import com.example.demologin.exception.exceptions.NotFoundException;
 import com.example.demologin.mapper.PaymentTransactionMapper;
 import com.example.demologin.repository.PaymentTransactionRepository;
 import com.example.demologin.service.TransactionService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @Service
+@EnableScheduling
 @RequiredArgsConstructor
 @Slf4j
 public class TransactionServiceImpl implements TransactionService {
@@ -181,5 +186,27 @@ public class TransactionServiceImpl implements TransactionService {
         stats.put("cancelledTransactions", cancelledTransactions);
         stats.put("totalRevenue", totalRevenue);
         return stats;
+    }
+
+    /**
+     * Periodic task that finds any payment transactions still marked as
+     * PENDING after we've waited the maximum amount of time allowed by the
+     * VNPAY integration.  According to the spec this is 15 minutes; anything
+     * older is no longer considered "pending" and should be stamped expired
+     * so administrators don't keep chasing ghost payments.
+     * <p>
+     * This method is executed automatically by Spring's scheduler (enabled
+     * on this bean) every five minutes.  The actual update is performed via
+     * a single bulk query in the repository.  A log entry is emitted when we
+     * actually touch any rows so that ops can audit the behavior.
+     */
+    @Scheduled(fixedRate = 5 * 60 * 1000) // every 5 minutes
+    @Transactional
+    public void expirePendingTransactions() {
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(15);
+        int updated = transactionRepository.expireOldTransactions(cutoff);
+        if (updated > 0) {
+            log.info("Expired {} pending payment transactions older than {}", updated, cutoff);
+        }
     }
 }
