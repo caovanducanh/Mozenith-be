@@ -156,6 +156,15 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    public PaymentTransactionResponse getLatestTransactionForUser(Long userId) {
+        PaymentTransaction tx = transactionRepository.findFirstByUserIdOrderByCreatedAtDesc(userId);
+        if (tx == null) {
+            throw new NotFoundException("No transactions found for user: " + userId);
+        }
+        return mapper.toResponse(tx);
+    }
+
+    @Override
     public Map<String, Object> getTransactionStats() {
         List<PaymentTransaction> allTransactions = transactionRepository.findAll();
 

@@ -48,6 +48,18 @@ public class PaymentController {
     }
 
     /**
+     * Check the status of the current user's latest payment transaction.
+     * Used by mobile app to poll for payment completion after returning from PayOS.
+     */
+    @GetMapping("/status")
+    @AuthenticatedEndpoint
+    @ApiResponse(message = "Payment status retrieved")
+    public Object getPaymentStatus() {
+        Long userId = accountUtils.getCurrentUser().getUserId();
+        return transactionService.getLatestTransactionForUser(userId);
+    }
+
+    /**
      * Webhook callback from PayOS. PayOS sends a POST with a JSON body
      * containing payment result and signature. We verify and process it.
      */

@@ -34,6 +34,11 @@ public interface TransactionService {
     PaymentTransactionResponse getTransactionById(Long id);
 
     /**
+     * Get the latest transaction for a given user.
+     */
+    PaymentTransactionResponse getLatestTransactionForUser(Long userId);
+
+    /**
      * Get transaction statistics for the dashboard.
      */
     java.util.Map<String, Object> getTransactionStats();

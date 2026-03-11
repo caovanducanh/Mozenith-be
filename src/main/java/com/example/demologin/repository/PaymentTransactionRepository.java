@@ -42,6 +42,8 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     List<PaymentTransaction> findByUserId(Long userId);
 
+    PaymentTransaction findFirstByUserIdOrderByCreatedAtDesc(Long userId);
+
         /**
          * Marks older pending transactions as expired.  Used by a scheduled job
          * that periodically walks the table and updates anything that has been
