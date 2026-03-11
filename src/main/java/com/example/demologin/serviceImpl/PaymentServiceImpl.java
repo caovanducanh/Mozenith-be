@@ -45,6 +45,9 @@ public class PaymentServiceImpl implements PaymentService {
     @Value("${payos.cancelUrl:https://be.ducanhvipro.dpdns.org/api/payment/cancel}")
     private String cancelUrl;
 
+    @Value("${payos.webhookUrl:https://be.ducanhvipro.dpdns.org/api/payment/webhook}")
+    private String webhookUrl;
+
     public PaymentServiceImpl(com.example.demologin.service.TransactionService transactionService) {
         this.transactionService = transactionService;
         this.httpClient = new OkHttpClient();
@@ -59,27 +62,28 @@ public class PaymentServiceImpl implements PaymentService {
             String txnRef = userId + "_" + orderCode;
             String description = "Premium upgrade";
 
-            // Create checksum
+            // Create checksum - PayOS signature includes specific fields in alphabetical order
             String checksumData = String.format("amount=%d&cancelUrl=%s&description=%s&orderCode=%d&returnUrl=%s",
                     (int) amount, cancelUrl, description, orderCode, returnUrl);
             String signature = generateHmacSHA256(checksumData, checksumKey);
 
-            // Build request body
-            String requestBody = objectMapper.writeValueAsString(Map.of(
-                    "orderCode", orderCode,
-                    "amount", (int) amount,
-                    "description", description,
-                    "cancelUrl", cancelUrl,
-                    "returnUrl", returnUrl,
-                    "signature", signature,
-                    "items", new Object[]{
-                            Map.of(
-                                    "name", "Premium Upgrade - Mozenith",
-                                    "quantity", 1,
-                                    "price", (int) amount
-                            )
-                    }
-            ));
+            // Build request body - using LinkedHashMap to handle more than 10 entries
+            java.util.LinkedHashMap<String, Object> requestMap = new java.util.LinkedHashMap<>();
+            requestMap.put("orderCode", orderCode);
+            requestMap.put("amount", (int) amount);
+            requestMap.put("description", description);
+            requestMap.put("cancelUrl", cancelUrl);
+            requestMap.put("returnUrl", returnUrl);
+            requestMap.put("webhookUrl", webhookUrl);  // IMPORTANT: PayOS needs this to send webhook callbacks
+            requestMap.put("signature", signature);
+            requestMap.put("items", new Object[]{
+                    Map.of(
+                            "name", "Premium Upgrade - Mozenith",
+                            "quantity", 1,
+                            "price", (int) amount
+                    )
+            });
+            String requestBody = objectMapper.writeValueAsString(requestMap);
 
             Request request = new Request.Builder()
                     .url(PAYOS_API_URL)

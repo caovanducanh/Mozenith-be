@@ -209,4 +209,13 @@ public class TransactionServiceImpl implements TransactionService {
             log.info("Expired {} pending payment transactions older than {}", updated, cutoff);
         }
     }
+
+    @Override
+    public PaymentTransactionResponse getLatestTransactionByUserId(Long userId) {
+        PaymentTransaction tx = transactionRepository.findTopByUserIdOrderByCreatedAtDesc(userId);
+        if (tx == null) {
+            return null;
+        }
+        return mapper.toResponse(tx);
+    }
 }

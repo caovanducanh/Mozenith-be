@@ -37,4 +37,9 @@ public interface TransactionService {
      * Get transaction statistics for the dashboard.
      */
     java.util.Map<String, Object> getTransactionStats();
+
+    /**
+     * Get the latest transaction for a user (for payment verification).
+     */
+    PaymentTransactionResponse getLatestTransactionByUserId(Long userId);
 }
