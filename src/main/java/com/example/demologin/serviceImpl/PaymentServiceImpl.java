@@ -149,6 +149,38 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    @Override
+    public boolean verifyPaymentWithPayOS(String orderCode) {
+        try {
+            Request request = new Request.Builder()
+                    .url(PAYOS_API_URL + "/" + orderCode)
+                    .addHeader("x-client-id", clientId)
+                    .addHeader("x-api-key", apiKey)
+                    .get()
+                    .build();
+
+            log.info("Calling PayOS verification API for orderCode: {}", orderCode);
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                String responseBody = response.body() != null ? response.body().string() : "";
+                log.info("PayOS verification API response for orderCode {}: HTTP {} - {}", orderCode, response.code(), responseBody);
+
+                if (!response.isSuccessful()) {
+                    log.error("PayOS verification API error for orderCode {}: HTTP {} - {}", orderCode, response.code(), responseBody);
+                    return false;
+                }
+
+                JsonNode jsonResponse = objectMapper.readTree(responseBody);
+                String status = jsonResponse.path("data").path("status").asText();
+                log.info("PayOS verification for orderCode {}: status={}", orderCode, status);
+                return "PAID".equalsIgnoreCase(status);
+            }
+        } catch (Exception e) {
+            log.error("Failed to verify payment with PayOS for orderCode: {}", orderCode, e);
+            return false;
+        }
+    }
+
     private String generateHmacSHA256(String data, String key) throws Exception {
         javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
         javax.crypto.spec.SecretKeySpec secretKey = new javax.crypto.spec.SecretKeySpec(

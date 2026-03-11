@@ -84,10 +84,13 @@ class PaymentControllerTest {
 
     @Test
     void success_page_returns_deep_link_html() {
+        when(paymentService.verifyPaymentWithPayOS("123")).thenReturn(true);
+        when(transactionService.getUserIdByOrderCode("123")).thenReturn(42L);
         ResponseEntity<String> resp = controller.paymentSuccess("123");
         String body = resp.getBody();
         assertTrue(body.contains("bestie://payment?status=success"));
         assertTrue(body.contains("Payment Successful") || body.contains("SUCCESS"));
+        verify(quotaService).setPackage(eq(42L), eq(PackageType.PREMIUM));
     }
 
     @Test

@@ -26,6 +26,11 @@ public interface TransactionService {
     void markCancelledByOrderCode(String orderCode);
 
     /**
+     * Mark a transaction as SUCCESS by its PayOS orderCode.
+     */
+    void markSuccessByOrderCode(String orderCode);
+
+    /**
      * Search using arbitrary filters, sorting, and pagination.
      */
     Page<PaymentTransactionResponse> searchTransactions(PaymentTransactionQueryRequest request,

@@ -117,15 +117,89 @@ public class PaymentController {
 
     /**
      * Success redirect page — after PayOS payment, user's browser is redirected here.
-     * Shows a success page and redirects to the mobile app via deep link.
+     * Verifies the payment with PayOS and upgrades the user before redirecting to the app.
      */
     @PublicEndpoint
     @GetMapping(path = "/success", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<String> paymentSuccess(@RequestParam(required = false) String orderCode) {
-        log.info("Payment success redirect, orderCode: {}", orderCode);
-        String deepLink = DEEP_LINK_BASE + "?status=success";
-        String html = buildRedirectHtml(deepLink, "success", "Payment successful! Redirecting to app...");
+    public ResponseEntity<String> paymentSuccess(
+            @RequestParam(required = false) String orderCode,
+            @RequestParam(required = false) String code,
+            @RequestParam(required = false) String status) {
+        log.info("Payment success redirect, orderCode: {}, code: {}, status: {}", orderCode, code, status);
+
+        boolean upgraded = false;
+
+        if (orderCode != null && !orderCode.isEmpty()) {
+            try {
+                boolean redirectIndicatesSuccess = "00".equals(code) && "PAID".equalsIgnoreCase(status);
+
+                // Try to verify with PayOS API
+                boolean apiConfirmed = paymentService.verifyPaymentWithPayOS(orderCode);
+
+                // If API didn't confirm but PayOS redirect says PAID, retry after delay
+                // (PayOS may take a moment to finalize the payment in their API)
+                if (!apiConfirmed && redirectIndicatesSuccess) {
+                    log.info("PayOS API didn't confirm yet for orderCode={}, retrying after 3s delay...", orderCode);
+                    try { Thread.sleep(3000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                    apiConfirmed = paymentService.verifyPaymentWithPayOS(orderCode);
+                }
+
+                if (apiConfirmed || redirectIndicatesSuccess) {
+                    Long userId = transactionService.getUserIdByOrderCode(orderCode);
+                    if (userId != null) {
+                        quotaService.setPackage(userId, PackageType.PREMIUM);
+                        transactionService.markSuccessByOrderCode(orderCode);
+                        upgraded = true;
+                        log.info("User {} upgraded to PREMIUM via success redirect (orderCode={}, apiConfirmed={}, redirectIndicatesSuccess={})",
+                                userId, orderCode, apiConfirmed, redirectIndicatesSuccess);
+                    } else {
+                        log.warn("Could not find userId for orderCode: {}", orderCode);
+                    }
+                } else {
+                    log.warn("Payment not confirmed for orderCode: {} (apiConfirmed=false, redirectIndicatesSuccess=false)", orderCode);
+                }
+            } catch (Exception e) {
+                log.error("Error processing payment success for orderCode: {}", orderCode, e);
+            }
+        }
+
+        String deepLink = DEEP_LINK_BASE + "?status=" + (upgraded ? "success" : "failed");
+        String msg = upgraded ? "Payment successful! Redirecting to app..." : "Payment processing issue. Please check the app.";
+        String htmlStatus = upgraded ? "success" : "failed";
+        String html = buildRedirectHtml(deepLink, htmlStatus, msg);
         return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(html);
+    }
+
+    /**
+     * Endpoint for the mobile app to verify a payment and trigger the upgrade.
+     * Calls PayOS API to confirm payment, then upgrades the user if confirmed.
+     */
+    @PostMapping("/verify")
+    @AuthenticatedEndpoint
+    @ApiResponse(message = "Payment verified")
+    public Object verifyAndUpgrade() {
+        Long userId = accountUtils.getCurrentUser().getUserId();
+        var latestTx = transactionService.getLatestTransactionForUser(userId);
+
+        if ("SUCCESS".equals(latestTx.getStatus())) {
+            // Already processed — user should already be premium
+            return Map.of("verified", true, "status", "SUCCESS");
+        }
+
+        String oc = latestTx.getOrderCode();
+        if (oc == null || oc.isEmpty()) {
+            return Map.of("verified", false, "status", "NO_ORDER");
+        }
+
+        boolean paid = paymentService.verifyPaymentWithPayOS(oc);
+        if (paid) {
+            quotaService.setPackage(userId, PackageType.PREMIUM);
+            transactionService.markSuccessByOrderCode(oc);
+            log.info("User {} upgraded to PREMIUM via verify endpoint (orderCode={})", userId, oc);
+            return Map.of("verified", true, "status", "SUCCESS");
+        }
+
+        return Map.of("verified", false, "status", latestTx.getStatus());
     }
 
     /**

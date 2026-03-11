@@ -14,4 +14,10 @@ public interface PaymentService {
      * and the payment was successful.
      */
     boolean verifyWebhook(Map<String, Object> webhookBody);
+
+    /**
+     * Call PayOS API to verify a payment by its orderCode.
+     * Returns true if PayOS confirms the payment status is PAID.
+     */
+    boolean verifyPaymentWithPayOS(String orderCode);
 }

@@ -110,6 +110,17 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @Transactional
+    public void markSuccessByOrderCode(String orderCode) {
+        PaymentTransaction tx = transactionRepository.findByOrderCode(orderCode);
+        if (tx != null && !"SUCCESS".equals(tx.getStatus())) {
+            tx.setStatus("SUCCESS");
+            tx.setPayosCode("00");
+            transactionRepository.save(tx);
+        }
+    }
+
+    @Override
     public Page<PaymentTransactionResponse> searchTransactions(PaymentTransactionQueryRequest request,
                                                                int page, int size) {
         Pageable pageable;
