@@ -30,6 +30,13 @@
         <java.version>17</java.version>
     </properties>
 
+    <repositories>
+        <repository>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
+        </repository>
+    </repositories>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -163,11 +170,11 @@
             <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
 
-        <!-- PayOS Java SDK for payment processing -->
+        <!-- OkHttp for PayOS API calls -->
         <dependency>
-            <groupId>vn.payos</groupId>
-            <artifactId>payos</artifactId>
-            <version>1.0.4</version>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+            <version>4.12.0</version>
         </dependency>
     </dependencies>
 
