@@ -20,8 +20,8 @@ public class PaymentServiceImplTest {
     @BeforeEach
     void setUp() {
         transactionService = mock(com.example.demologin.service.TransactionService.class);
-        // Use dummy credentials — PayOS SDK will instantiate but API calls will fail
-        service = new PaymentServiceImpl(transactionService, "test_client_id", "test_api_key", "test_checksum_key");
+        // Use dummy transaction service; PayOS API integration is mocked/ignored in unit tests
+        service = new PaymentServiceImpl(transactionService);
     }
 
     @Test

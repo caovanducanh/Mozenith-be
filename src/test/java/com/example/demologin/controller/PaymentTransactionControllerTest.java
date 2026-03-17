@@ -72,7 +72,7 @@ class PaymentTransactionControllerTest {
                 "totalRevenue", 250000L);
         when(transactionService.getTransactionStats()).thenReturn(mockStats);
         Object resp = controller.getTransactionStats();
-        assertTrue(resp != null);
-        assertTrue(resp instanceof org.springframework.http.ResponseEntity);
+        assertTrue(resp instanceof java.util.Map);
+        assertTrue(((java.util.Map<?, ?>) resp).equals(mockStats));
     }
 }
