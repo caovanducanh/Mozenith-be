@@ -1,19 +1,19 @@
 package com.example.demologin.controller;
 
-import com.example.demologin.dto.request.PaymentTransactionQueryRequest;
-import com.example.demologin.service.TransactionService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.*;
-
 import org.springframework.web.bind.annotation.GetMapping;
-import com.example.demologin.annotation.SecuredEndpoint;
 
-import java.lang.reflect.Method;
+import com.example.demologin.annotation.SecuredEndpoint;
+import com.example.demologin.dto.request.PaymentTransactionQueryRequest;
+import com.example.demologin.service.TransactionService;
 
 class PaymentTransactionControllerTest {
 
