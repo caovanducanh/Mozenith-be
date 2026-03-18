@@ -1,6 +1,8 @@
 package com.example.demologin.controller;
 
+import com.example.demologin.annotation.ApiResponse;
 import com.example.demologin.annotation.AuthenticatedEndpoint;
+import com.example.demologin.annotation.PageResponse;
 import com.example.demologin.annotation.SecuredEndpoint;
 import com.example.demologin.dto.request.FeedbackRequest;
 import com.example.demologin.dto.response.FeedbackResponse;
@@ -50,11 +52,12 @@ public class FeedbackController {
 
     @GetMapping("/all")
     @AuthenticatedEndpoint
+    @PageResponse
+    @ApiResponse(message = "All feedback retrieved")
     @Operation(summary = "Get all feedback", description = "Get all feedback from all users (admin dashboard)")
-    public ResponseEntity<ResponseObject> getAllFeedback(
+    public Object getAllFeedback(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Page<FeedbackResponse> feedbackPage = feedbackService.getAllFeedback(PageRequest.of(page, size));
-        return ResponseEntity.ok(new ResponseObject(200, "All feedback retrieved", feedbackPage));
+        return feedbackService.getAllFeedback(PageRequest.of(page, size));
     }
 }
