@@ -10,7 +10,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
 import org.springframework.http.ResponseEntity;
 
 import com.example.demologin.annotation.PublicEndpoint;
@@ -44,7 +43,7 @@ class PaymentControllerTest {
 
     @Test
     void success_endpoint_is_public() throws NoSuchMethodException {
-        var method = PaymentController.class.getMethod("paymentSuccess", String.class);
+        var method = PaymentController.class.getMethod("paymentSuccess", String.class, String.class, String.class);
         assertTrue(method.isAnnotationPresent(PublicEndpoint.class), "Success handler should be marked public");
     }
 
@@ -86,10 +85,10 @@ class PaymentControllerTest {
     void success_page_returns_deep_link_html() {
         when(paymentService.verifyPaymentWithPayOS("123")).thenReturn(true);
         when(transactionService.getUserIdByOrderCode("123")).thenReturn(42L);
-        ResponseEntity<String> resp = controller.paymentSuccess("123");
+        ResponseEntity<String> resp = controller.paymentSuccess("123", "00", "PAID");
         String body = resp.getBody();
         assertTrue(body.contains("bestie://payment?status=success"));
-        assertTrue(body.contains("Payment Successful") || body.contains("SUCCESS"));
+        assertTrue(body.contains("Payment successful") || body.contains("SUCCESS"));
         verify(quotaService).setPackage(eq(42L), eq(PackageType.PREMIUM));
     }
 

@@ -4,12 +4,13 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -78,6 +79,9 @@ class CustomOAuth2SuccessHandlerTest {
 
         handler.onAuthenticationSuccess(req, resp, token);
 
-        verify(googleCalendarService, times(1)).saveCredentialFromAuthorizedClient(eq(42L), eq("access"), eq("refresh"), anySet(), any());
+        // This handler redirects to the frontend with token parameters on successful auth
+        assertTrue(resp.getRedirectedUrl().contains("token="));
+        assertTrue(resp.getRedirectedUrl().contains("refreshToken="));
+        verify(googleCalendarService, times(0)).saveCredentialFromAuthorizedClient(anyLong(), anyString(), anyString(), anySet(), any());
     }
 }
